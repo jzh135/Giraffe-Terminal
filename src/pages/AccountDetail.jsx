@@ -65,7 +65,7 @@ function AccountDetail() {
         try {
             await createHolding({ ...data, account_id: id });
             await loadData();
-            setHoldingModalOpen(false);
+            setTradeModalOpen(false);
         } catch (err) {
             alert('Failed to add holding: ' + err.message);
         }
@@ -75,7 +75,7 @@ function AccountDetail() {
         try {
             await sellStock({ ...data, account_id: id });
             await loadData();
-            setSellModalOpen(false);
+            setTradeModalOpen(false);
             setSelectedHolding(null);
         } catch (err) {
             alert('Failed to sell stock: ' + err.message);
@@ -179,6 +179,21 @@ function AccountDetail() {
                     </Link>
                     <h1 className="page-title mt-sm">{account.name}</h1>
                     <p className="page-subtitle">{account.institution || account.type}</p>
+                </div>
+                <div className="action-row">
+                    <button className="btn btn-primary" onClick={() => {
+                        setSelectedHolding(null);
+                        setTradeTab('buy');
+                        setTradeModalOpen(true);
+                    }}>
+                        Trade Stock
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setDividendModalOpen(true)}>
+                        Record Dividend
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setCashModalOpen(true)}>
+                        Cash Movement
+                    </button>
                 </div>
             </div>
 
@@ -324,23 +339,6 @@ function AccountDetail() {
 
             {activeTab === 'trade' && (
                 <div>
-                    <div className="mb-md text-right">
-                        <button className="btn btn-primary" onClick={() => {
-                            setSelectedHolding(null);
-                            setTradeTab('sell');
-                            setTradeModalOpen(true);
-                        }} style={{ marginRight: '10px' }}>
-                            ➖ Sell Stock
-                        </button>
-                        <button className="btn btn-primary" onClick={() => {
-                            setSelectedHolding(null);
-                            setTradeTab('buy');
-                            setTradeModalOpen(true);
-                        }}>
-                            ➕ Buy Stock
-                        </button>
-                    </div>
-
                     <div className="card">
                         {transactions.length === 0 ? (
                             <div className="empty-state">
@@ -383,15 +381,6 @@ function AccountDetail() {
 
             {activeTab === 'cash' && (
                 <div>
-                    <div className="mb-md text-right action-row justify-end">
-                        <button className="btn btn-secondary" onClick={() => setDividendModalOpen(true)}>
-                            💰 Record Dividend
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => setCashModalOpen(true)}>
-                            💵 Cash Movement
-                        </button>
-                    </div>
-
                     <div className="card">
                         {combinedCashActivity.length === 0 ? (
                             <div className="empty-state">
