@@ -4,8 +4,7 @@ import {
     getAccount, getHoldings, getPrices, getTransactions, getCashMovements, getDividends,
     createHolding, sellStock, createCashMovement, createDividend, deleteHolding
 } from '../api';
-import HoldingModal from '../components/modals/HoldingModal';
-import SellModal from '../components/modals/SellModal';
+import TradeModal from '../components/modals/TradeModal';
 import CashMovementModal from '../components/modals/CashMovementModal';
 import DividendModal from '../components/modals/DividendModal';
 import ConfirmModal from '../components/modals/ConfirmModal';
@@ -24,8 +23,9 @@ function AccountDetail() {
     const [activeTab, setActiveTab] = useState('holdings');
 
     // Modal States
-    const [holdingModalOpen, setHoldingModalOpen] = useState(false);
-    const [sellModalOpen, setSellModalOpen] = useState(false);
+    // Modal States
+    const [tradeModalOpen, setTradeModalOpen] = useState(false);
+    const [tradeTab, setTradeTab] = useState('buy'); // 'buy' or 'sell'
     const [cashModalOpen, setCashModalOpen] = useState(false);
     const [dividendModalOpen, setDividendModalOpen] = useState(false);
     const [selectedHolding, setSelectedHolding] = useState(null);
@@ -115,7 +115,8 @@ function AccountDetail() {
 
     function openSellModal(holding) {
         setSelectedHolding(holding);
-        setSellModalOpen(true);
+        setTradeTab('sell');
+        setTradeModalOpen(true);
     }
 
     // Aggregation Logic
@@ -326,11 +327,16 @@ function AccountDetail() {
                     <div className="mb-md text-right">
                         <button className="btn btn-primary" onClick={() => {
                             setSelectedHolding(null);
-                            setSellModalOpen(true);
+                            setTradeTab('sell');
+                            setTradeModalOpen(true);
                         }} style={{ marginRight: '10px' }}>
                             ➖ Sell Stock
                         </button>
-                        <button className="btn btn-primary" onClick={() => setHoldingModalOpen(true)}>
+                        <button className="btn btn-primary" onClick={() => {
+                            setSelectedHolding(null);
+                            setTradeTab('buy');
+                            setTradeModalOpen(true);
+                        }}>
                             ➕ Buy Stock
                         </button>
                     </div>
@@ -431,25 +437,22 @@ function AccountDetail() {
             )}
 
             {/* Modals */}
-            {holdingModalOpen && (
-                <HoldingModal
-                    onSave={handleAddHolding}
-                    onClose={() => setHoldingModalOpen(false)}
-                />
-            )}
-
-            {sellModalOpen && (
-                <SellModal
-                    holding={selectedHolding}
+            {/* Modals */}
+            {tradeModalOpen && (
+                <TradeModal
+                    initialTab={tradeTab}
+                    initialHolding={selectedHolding}
                     holdings={holdings}
                     prices={prices}
-                    onSave={handleSell}
+                    onBuy={handleAddHolding}
+                    onSell={handleSell}
                     onClose={() => {
-                        setSellModalOpen(false);
+                        setTradeModalOpen(false);
                         setSelectedHolding(null);
                     }}
                 />
             )}
+
 
             {cashModalOpen && (
                 <CashMovementModal
