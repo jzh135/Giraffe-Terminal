@@ -1,0 +1,88 @@
+-- Giraffe Terminal Database Schema
+-- SQLite database for investment tracking
+
+-- Investment accounts
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT DEFAULT 'brokerage',
+  institution TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Individual stock lots (each purchase is a separate lot)
+CREATE TABLE IF NOT EXISTS holdings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  shares REAL NOT NULL,
+  cost_basis REAL NOT NULL,
+  purchase_date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Buy/sell transactions
+CREATE TABLE IF NOT EXISTS transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  holding_id INTEGER REFERENCES holdings(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  shares REAL NOT NULL,
+  price REAL NOT NULL,
+  total REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Dividends (linked to account + symbol, not individual lots)
+CREATE TABLE IF NOT EXISTS dividends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Cash movements (deposit, withdrawal, fee, interest)
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Stock splits
+CREATE TABLE IF NOT EXISTS stock_splits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  symbol TEXT NOT NULL,
+  ratio REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Cached stock prices
+CREATE TABLE IF NOT EXISTS stock_prices (
+  symbol TEXT PRIMARY KEY,
+  price REAL NOT NULL,
+  name TEXT,
+  updated_at TEXT NOT NULL
+);
+
+-- Create indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
+CREATE INDEX IF NOT EXISTS idx_holdings_symbol ON holdings(symbol);
+CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+CREATE INDEX IF NOT EXISTS idx_dividends_account ON dividends(account_id);
+CREATE INDEX IF NOT EXISTS idx_dividends_symbol ON dividends(symbol);
+CREATE INDEX IF NOT EXISTS idx_cash_movements_account ON cash_movements(account_id);
+CREATE INDEX IF NOT EXISTS idx_stock_splits_symbol ON stock_splits(symbol);
