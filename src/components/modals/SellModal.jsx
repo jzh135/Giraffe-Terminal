@@ -146,7 +146,6 @@ function SellModal({ holding, holdings = [], prices = {}, onSave, onClose }) {
                                         placeholder="0"
                                         step="any"
                                         min="0"
-                                        max={activeHolding.shares}
                                         required
                                         style={{ flex: 1 }}
                                     />

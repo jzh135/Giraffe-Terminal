@@ -25,6 +25,11 @@ async function request(endpoint, options = {}) {
 
 // Admin
 export const getAdminStats = () => request('/admin/stats');
+export const resetDatabase = () => request('/admin/reset', { method: 'POST' });
+export const restartServer = () => request('/admin/restart', { method: 'POST' });
+export const clearPriceCache = () => request('/admin/clear-cache', { method: 'POST' });
+export const getAppSettings = () => request('/admin/settings');
+export const updateAppSettings = (data) => request('/admin/settings', { method: 'POST', body: data });
 
 // Accounts
 export const getAccounts = () => request('/accounts');

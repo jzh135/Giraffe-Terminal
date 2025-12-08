@@ -206,6 +206,12 @@ function AccountDetail() {
                         {formatCurrency(account.cash_balance)}
                     </div>
                 </div>
+                <div className="stat-card">
+                    <div className="stat-label">Realized Gain/Loss</div>
+                    <div className={`stat-value ${account.realized_gain >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        {formatCurrency(account.realized_gain)}
+                    </div>
+                </div>
             </div>
 
             <div className="tabs">

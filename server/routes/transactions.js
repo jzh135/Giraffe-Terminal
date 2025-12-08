@@ -134,10 +134,14 @@ router.post('/sell', (req, res) => {
 
         // Use transaction for atomicity
         const sellStock = db.transaction(() => {
+            // Calculate realized gain
+            const costBasisSold = (holding.cost_basis / holding.shares) * shares;
+            const realizedGain = total - costBasisSold;
+
             // Log the sell transaction
             const txResult = db.prepare(
-                'INSERT INTO transactions (account_id, holding_id, type, symbol, shares, price, total, date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            ).run(account_id, holding_id, 'sell', holding.symbol, shares, price, total, date, notes || null);
+                'INSERT INTO transactions (account_id, holding_id, type, symbol, shares, price, total, date, notes, realized_gain) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ).run(account_id, holding_id, 'sell', holding.symbol, shares, price, total, date, notes || null, realizedGain);
 
             // Update the holding shares
             const remainingShares = holding.shares - shares;

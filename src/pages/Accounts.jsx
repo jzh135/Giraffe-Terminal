@@ -146,6 +146,9 @@ function Accounts() {
                                 Cash: {formatCurrency(account.cash_balance)}
                                 {account.cash_balance < 0 && <span className="badge badge-danger ml-sm">Margin</span>}
                             </div>
+                            <div className={`stat-change mt-sm ${account.realized_gain >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '0.9rem' }}>
+                                Realized: {account.realized_gain >= 0 ? '+' : ''}{formatCurrency(account.realized_gain)}
+                            </div>
                         </Link>
                     ))}
                 </div>

@@ -37,4 +37,106 @@ router.get('/stats', (req, res) => {
     }
 });
 
+// Reset database (Danger Zone)
+router.post('/reset', (req, res) => {
+    try {
+        const resetTx = db.transaction(() => {
+            db.prepare('DELETE FROM transactions').run();
+            db.prepare('DELETE FROM holdings').run();
+            db.prepare('DELETE FROM dividends').run();
+            db.prepare('DELETE FROM cash_movements').run();
+            db.prepare('DELETE FROM stock_splits').run();
+            db.prepare('DELETE FROM accounts').run();
+            db.prepare('DELETE FROM stock_prices').run();
+            // Reset sequences (optional but good for clean slate)
+            db.prepare('DELETE FROM sqlite_sequence').run();
+        });
+
+        resetTx();
+        res.json({ message: 'Database reset successful' });
+    } catch (err) {
+        console.error('Reset failed:', err);
+        res.status(500).json({ error: 'Failed to reset database' });
+    }
+});
+
+// Restart server (triggers file watch by touching a file)
+router.post('/restart', (req, res) => {
+    try {
+        res.json({ message: 'Server restarting...' });
+        // Touch the server file to trigger node --watch restart
+        setTimeout(() => {
+            const serverPath = join(__dirname, '..', 'index.js');
+            const now = new Date();
+            fs.utimesSync(serverPath, now, now);
+            console.log('Server restart triggered via file touch.');
+        }, 500);
+    } catch (err) {
+        console.error('Restart failed:', err);
+        res.status(500).json({ error: 'Failed to restart server' });
+    }
+});
+
+// Clear price cache
+router.post('/clear-cache', (req, res) => {
+    try {
+        const result = db.prepare('DELETE FROM stock_prices').run();
+        res.json({
+            message: 'Price cache cleared successfully',
+            deletedCount: result.changes
+        });
+    } catch (err) {
+        console.error('Clear cache failed:', err);
+        res.status(500).json({ error: 'Failed to clear cache' });
+    }
+});
+
+// Get app settings
+router.get('/settings', (req, res) => {
+    try {
+        const settings = db.prepare('SELECT * FROM app_settings').all();
+        const settingsObj = {};
+        settings.forEach(s => {
+            settingsObj[s.key] = s.value;
+        });
+        res.json(settingsObj);
+    } catch (err) {
+        console.error('Get settings failed:', err);
+        res.status(500).json({ error: 'Failed to get settings' });
+    }
+});
+
+
+// Update app settings
+router.post('/settings', (req, res) => {
+    try {
+        const { app_name, logo_type, logo_value } = req.body;
+
+        const updateTx = db.transaction(() => {
+            if (app_name !== undefined) {
+                db.prepare("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))").run('app_name', app_name);
+            }
+            if (logo_type !== undefined) {
+                db.prepare("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))").run('logo_type', logo_type);
+            }
+            if (logo_value !== undefined) {
+                db.prepare("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))").run('logo_value', logo_value);
+            }
+        });
+
+        updateTx();
+
+        const settings = db.prepare('SELECT * FROM app_settings').all();
+        const settingsObj = {};
+        settings.forEach(s => {
+            settingsObj[s.key] = s.value;
+        });
+
+        res.json(settingsObj);
+    } catch (err) {
+        console.error('Update settings failed:', err);
+        res.status(500).json({ error: 'Failed to update settings' });
+    }
+});
+
 export default router;

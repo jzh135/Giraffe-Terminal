@@ -77,6 +77,18 @@ CREATE TABLE IF NOT EXISTS stock_prices (
   updated_at TEXT NOT NULL
 );
 
+-- Application settings
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Insert default settings
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('app_name', 'Giraffe Terminal');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('logo_type', 'default');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('logo_value', '🦒');
+
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_symbol ON holdings(symbol);

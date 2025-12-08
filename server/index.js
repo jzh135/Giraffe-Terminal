@@ -40,4 +40,5 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
     console.log(`Giraffe Terminal API running on http://localhost:${PORT}`);
+    console.log(`Database connected.`);
 });

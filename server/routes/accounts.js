@@ -11,7 +11,8 @@ router.get('/', (req, res) => {
         // Calculate cash balance for each account
         const accountsWithBalance = accounts.map(account => {
             const cashBalance = calculateCashBalance(account.id);
-            return { ...account, cash_balance: cashBalance };
+            const realizedGain = calculateRealizedGain(account.id);
+            return { ...account, cash_balance: cashBalance, realized_gain: realizedGain };
         });
 
         res.json(accountsWithBalance);
@@ -29,6 +30,7 @@ router.get('/:id', (req, res) => {
         }
 
         account.cash_balance = calculateCashBalance(account.id);
+        account.realized_gain = calculateRealizedGain(account.id);
         res.json(account);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -105,7 +107,27 @@ function calculateCashBalance(accountId) {
         "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'sell'"
     ).get(accountId);
 
+    // Realized Gains (stored in generated column for new transactions, or calculated?)
+    // Actually, we just need to return it separately or add it to the account object? 
+    // The user wants to SEE realized gain/loss. So let's fetch it.
+    // We'll return it as part of the balance or a new field? New field is better logic.
+    // But this function is 'calculateCashBalance'.
+    // I should modify the ROUTE to fetch this separately.
+
     return cashMovements.total + dividends.total - buys.total + sells.total;
+}
+
+// Helper: Calculate realized gain for an account
+function calculateRealizedGain(accountId) {
+    const transactions = db.prepare(
+        "SELECT COALESCE(SUM(realized_gain), 0) as total FROM transactions WHERE account_id = ?"
+    ).get(accountId);
+
+    const dividends = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM dividends WHERE account_id = ?"
+    ).get(accountId);
+
+    return transactions.total + dividends.total;
 }
 
 export default router;
