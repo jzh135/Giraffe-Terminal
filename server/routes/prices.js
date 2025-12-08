@@ -3,8 +3,6 @@ import db from '../db.js';
 
 const router = Router();
 
-const CORS_PROXY = 'https://corsproxy.io/?';
-
 // Get cached prices for symbols
 router.get('/', (req, res) => {
     try {
@@ -87,10 +85,10 @@ router.get('/fetch/:symbol', async (req, res) => {
     }
 });
 
-// Helper: Fetch price from Yahoo Finance using CORS proxy
+// Helper: Fetch price from Yahoo Finance
 async function fetchYahooPrice(symbol) {
     try {
-        const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
         const response = await fetch(url);
 
         if (!response.ok) {

@@ -23,6 +23,9 @@ async function request(endpoint, options = {}) {
     return response.json();
 }
 
+// Admin
+export const getAdminStats = () => request('/admin/stats');
+
 // Accounts
 export const getAccounts = () => request('/accounts');
 export const getAccount = (id) => request(`/accounts/${id}`);

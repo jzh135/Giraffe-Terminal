@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import TradeModal from '../components/modals/TradeModal';
+import StockSplitModal from '../components/modals/StockSplitModal';
 
 function StockDetail() {
     const { symbol } = useParams();
@@ -16,6 +17,7 @@ function StockDetail() {
     // Modal State
     const [tradeModalOpen, setTradeModalOpen] = useState(false);
     const [tradeTab, setTradeTab] = useState('buy');
+    const [stockSplitModalOpen, setStockSplitModalOpen] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -79,6 +81,16 @@ function StockDetail() {
         }
     }
 
+    async function handleStockSplit(data) {
+        try {
+            await api.createStockSplit(data);
+            await loadData();
+            setStockSplitModalOpen(false);
+        } catch (err) {
+            alert('Failed to apply stock split: ' + err.message);
+        }
+    }
+
     const totalShares = holdings.reduce((sum, h) => sum + h.shares, 0);
     const totalCostBasis = holdings.reduce((sum, h) => sum + h.cost_basis, 0);
     const currentPrice = price?.price || 0;
@@ -128,6 +140,7 @@ function StockDetail() {
                     </h1>
                 </div>
                 <div className="action-row">
+                    <button className="btn btn-secondary" onClick={() => setStockSplitModalOpen(true)}>Stock Split</button>
                     <button className="btn btn-primary" onClick={() => handleTradeAction('buy')}>Trade</button>
                 </div>
             </div>
@@ -251,6 +264,14 @@ function StockDetail() {
                     onSell={handleSell}
                     onDividend={handleDividend}
                     onClose={() => setTradeModalOpen(false)}
+                />
+            )}
+
+            {stockSplitModalOpen && (
+                <StockSplitModal
+                    symbols={[symbol]}
+                    onSave={handleStockSplit}
+                    onClose={() => setStockSplitModalOpen(false)}
                 />
             )}
         </div>
