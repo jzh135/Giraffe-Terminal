@@ -1,12 +1,21 @@
 import { useState } from 'react';
 
-function CashMovementModal({ onSave, onClose }) {
+function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate = null }) {
     const today = new Date().toISOString().split('T')[0];
+    const isEditing = !!editingMovement;
 
     // Rows state for multi-entry
-    const [rows, setRows] = useState([
-        { id: Date.now(), type: 'deposit', amount: '', date: today, notes: '' }
-    ]);
+    const [rows, setRows] = useState(
+        isEditing
+            ? [{
+                id: editingMovement.id,
+                type: editingMovement.type,
+                amount: Math.abs(editingMovement.amount), // Display as positive
+                date: new Date(editingMovement.date || today).toISOString().split('T')[0],
+                notes: editingMovement.notes || ''
+            }]
+            : [{ id: Date.now(), type: 'deposit', amount: '', date: today, notes: '' }]
+    );
 
     const createRow = () => ({
         id: Date.now() + Math.random(),
@@ -42,12 +51,18 @@ function CashMovementModal({ onSave, onClose }) {
 
         try {
             for (const row of validRows) {
-                await onSave({
+                const payload = {
                     type: row.type,
                     amount: parseFloat(row.amount),
                     date: row.date,
                     notes: row.notes || null
-                });
+                };
+
+                if (isEditing) {
+                    await onUpdate(editingMovement.id, payload);
+                } else {
+                    await onSave(payload);
+                }
             }
             onClose();
         } catch (err) {
@@ -60,7 +75,7 @@ function CashMovementModal({ onSave, onClose }) {
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%' }}>
                 <div className="modal-header">
-                    <h2 className="modal-title">Cash Movement</h2>
+                    <h2 className="modal-title">{isEditing ? 'Edit Cash Movement' : 'Cash Movement'}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
@@ -118,7 +133,7 @@ function CashMovementModal({ onSave, onClose }) {
                                             />
                                         </td>
                                         <td>
-                                            {rows.length > 1 && (
+                                            {!isEditing && rows.length > 1 && (
                                                 <button
                                                     type="button"
                                                     className="btn btn-icon text-negative"
@@ -135,22 +150,24 @@ function CashMovementModal({ onSave, onClose }) {
                         </table>
                     </div>
 
-                    <div style={{ marginTop: '10px' }}>
-                        <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={addRow}
-                        >
-                            + Add Row
-                        </button>
-                    </div>
+                    {!isEditing && (
+                        <div style={{ marginTop: '10px' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={addRow}
+                            >
+                                + Add Row
+                            </button>
+                        </div>
+                    )}
 
                     <div className="modal-actions" style={{ marginTop: '20px' }}>
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Cancel
                         </button>
                         <button type="submit" className="btn btn-primary">
-                            Submit {rows.length} {rows.length === 1 ? 'Entry' : 'Entries'}
+                            {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
                         </button>
                     </div>
 

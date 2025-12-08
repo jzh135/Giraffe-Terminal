@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
     getAccount, getHoldings, getPrices, getTransactions, getCashMovements, getDividends,
-    createHolding, sellStock, createCashMovement, createDividend, deleteHolding
+    createHolding, sellStock, createCashMovement, createDividend, deleteHolding,
+    updateTransaction, updateCashMovement, updateDividend, deleteTransaction, deleteCashMovement, deleteDividend
 } from '../api';
 import TradeModal from '../components/modals/TradeModal';
 import CashMovementModal from '../components/modals/CashMovementModal';
@@ -30,6 +31,10 @@ function AccountDetail() {
     const [dividendModalOpen, setDividendModalOpen] = useState(false);
     const [selectedHolding, setSelectedHolding] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+    // Edit states
+    const [editTransaction, setEditTransaction] = useState(null);
+    const [editCash, setEditCash] = useState(null);
 
     useEffect(() => {
         loadData();
@@ -100,11 +105,45 @@ function AccountDetail() {
     async function handleDeleteHolding() {
         if (!deleteConfirm) return;
         try {
-            await deleteHolding(deleteConfirm.id);
+            if (deleteConfirm.type === 'holding') {
+                await deleteHolding(deleteConfirm.data.id);
+            } else if (deleteConfirm.type === 'transaction') {
+                await deleteTransaction(deleteConfirm.data.id);
+            } else if (deleteConfirm.type === 'cash') {
+                await deleteCashMovement(deleteConfirm.data.id);
+            } else if (deleteConfirm.type === 'dividend') {
+                await deleteDividend(deleteConfirm.data.id);
+            }
+
             await loadData();
             setDeleteConfirm(null);
         } catch (err) {
-            alert('Failed to delete holding: ' + err.message);
+            alert('Failed to delete: ' + err.message);
+        }
+    }
+
+    // Edit Handlers
+    async function handleUpdateTransaction(id, data) {
+        try {
+            if (editTransaction.type === 'dividend') { // Using the normalized type from our edit setup
+                await updateDividend(id, data);
+            } else {
+                await updateTransaction(id, data);
+            }
+            await loadData();
+            setEditTransaction(null);
+        } catch (err) {
+            alert('Failed to update: ' + err.message);
+        }
+    }
+
+    async function handleUpdateCash(id, data) {
+        try {
+            await updateCashMovement(id, data);
+            await loadData();
+            setEditCash(null);
+        } catch (err) {
+            alert('Failed to update: ' + err.message);
         }
     }
 
@@ -322,7 +361,7 @@ function AccountDetail() {
                                                 </button>
                                                 <button
                                                     className="btn btn-icon"
-                                                    onClick={() => setDeleteConfirm(lot)}
+                                                    onClick={() => setDeleteConfirm({ type: 'holding', data: lot })}
                                                     title="Delete"
                                                 >
                                                     🗑️
@@ -355,6 +394,7 @@ function AccountDetail() {
                                         <th className="text-right">Shares</th>
                                         <th className="text-right">Price</th>
                                         <th className="text-right">Total</th>
+                                        <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -370,6 +410,12 @@ function AccountDetail() {
                                             <td className="text-right number">{tx.shares}</td>
                                             <td className="text-right number">{formatCurrency(tx.price)}</td>
                                             <td className="text-right number">{formatCurrency(tx.total)}</td>
+                                            <td className="text-right">
+                                                <div className="action-row justify-end">
+                                                    <button className="btn btn-icon" onClick={() => setEditTransaction(tx)} title="Edit">✏️</button>
+                                                    <button className="btn btn-icon text-negative" onClick={() => setDeleteConfirm({ type: 'transaction', data: tx })} title="Delete">🗑️</button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -395,6 +441,7 @@ function AccountDetail() {
                                         <th>Type</th>
                                         <th>Description</th>
                                         <th className="text-right">Amount</th>
+                                        <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -415,6 +462,27 @@ function AccountDetail() {
                                             </td>
                                             <td className={`text-right number ${item.amount >= 0 ? 'text-positive' : 'text-negative'}`}>
                                                 {formatCurrency(item.amount)}
+                                            </td>
+                                            <td className="text-right">
+                                                <div className="action-row justify-end">
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => {
+                                                            if (item.category === 'dividend') setEditTransaction({ ...item, type: 'dividend', account_id: id }); // route dividend to TradeModal logic
+                                                            else setEditCash(item);
+                                                        }}
+                                                        title="Edit"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon text-negative"
+                                                        onClick={() => setDeleteConfirm({ type: item.category === 'dividend' ? 'dividend' : 'cash', data: item })}
+                                                        title="Delete"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -452,11 +520,30 @@ function AccountDetail() {
 
             {deleteConfirm && (
                 <ConfirmModal
-                    title="Delete Holding"
-                    message={`Are you sure you want to delete this ${deleteConfirm.symbol} lot?`}
+                    title={`Delete ${deleteConfirm.type === 'holding' ? 'Holding' : 'Entry'}`}
+                    message={`Are you sure you want to delete this ${deleteConfirm.type}?`}
                     confirmText="Delete"
                     onConfirm={handleDeleteHolding}
                     onCancel={() => setDeleteConfirm(null)}
+                />
+            )}
+
+            {/* Edit Modals */}
+            {editCash && (
+                <CashMovementModal
+                    editingMovement={editCash}
+                    onUpdate={handleUpdateCash}
+                    onClose={() => setEditCash(null)}
+                />
+            )}
+
+            {editTransaction && (
+                <TradeModal
+                    editingTransaction={editTransaction}
+                    holdings={holdings}
+                    prices={prices}
+                    onUpdate={handleUpdateTransaction}
+                    onClose={() => setEditTransaction(null)}
                 />
             )}
         </div>

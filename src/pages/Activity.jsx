@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import * as api from '../api';
+import TradeModal from '../components/modals/TradeModal';
+import CashMovementModal from '../components/modals/CashMovementModal';
+import ConfirmModal from '../components/modals/ConfirmModal';
 
 function Activity() {
     const [transactions, setTransactions] = useState([]);
@@ -11,6 +14,15 @@ function Activity() {
     const [activeTab, setActiveTab] = useState('all');
     const [selectedAccount, setSelectedAccount] = useState('');
 
+    // Modal State
+    const [editTransaction, setEditTransaction] = useState(null);
+    const [editCash, setEditCash] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+    // Auxiliary data for modals (holdings/prices) - loaded if needed
+    const [holdings, setHoldings] = useState([]);
+    const [prices, setPrices] = useState({});
+
     useEffect(() => {
         loadData();
     }, [selectedAccount]);
@@ -19,17 +31,21 @@ function Activity() {
         try {
             const filters = selectedAccount ? { account_id: selectedAccount } : {};
 
-            const [txData, divData, cashData, accountsData] = await Promise.all([
+            const [txData, divData, cashData, accountsData, holdingsData, pricesData] = await Promise.all([
                 api.getTransactions(filters),
                 api.getDividends(filters),
                 api.getCashMovements(filters),
-                api.getAccounts()
+                api.getAccounts(),
+                api.getHoldings(selectedAccount || undefined), // Fetch all holdings or filter
+                api.getPrices()
             ]);
 
             setTransactions(txData);
             setDividends(divData);
             setCashMovements(cashData);
             setAccounts(accountsData);
+            setHoldings(holdingsData);
+            setPrices(Array.isArray(pricesData) ? pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}) : {});
         } catch (err) {
             console.error('Failed to load activity:', err);
         } finally {
@@ -99,6 +115,71 @@ function Activity() {
                 return <span className="badge badge-danger">{activity.type.toUpperCase()}</span>;
             default:
                 return <span className="badge badge-neutral">OTHER</span>;
+        }
+    };
+
+    const handleEdit = (activity) => {
+        if (activity.activityType === 'transaction' || activity.activityType === 'dividend') {
+            // For transactions, we need to ensure the modal gets the right unified structure
+            // If it's a dividend from the dividends table, map it to the structure TradeModal expects
+            const mapped = activity.activityType === 'dividend'
+                ? { ...activity, type: 'dividend' } // TradeModal uses 'type' to determine tab
+                : activity;
+            setEditTransaction(mapped);
+        } else if (activity.activityType === 'cash') {
+            setEditCash(activity);
+        }
+    };
+
+    const handleUpdateTransaction = async (id, data) => {
+        try {
+            if (editTransaction.activityType === 'transaction' || editTransaction.type === 'buy' || editTransaction.type === 'sell') {
+                if (data.type === 'dividend') {
+                    // If user switched type to dividend? Not supported easily in modal yet (modal keeps tabs separate usually but logic allows)
+                    // But here we are assuming the update follows the original object type mostly.
+                    // The API `updateTransaction` is for table `transactions`.
+                    await api.updateTransaction(id, data);
+                } else {
+                    await api.updateTransaction(id, data);
+                }
+            } else if (editTransaction.activityType === 'dividend' || editTransaction.type === 'dividend') {
+                await api.updateDividend(id, data);
+            }
+            setEditTransaction(null);
+            loadData();
+        } catch (err) {
+            alert('Failed to update: ' + err.message);
+        }
+    };
+
+    const handleUpdateCash = async (id, data) => {
+        try {
+            await api.updateCashMovement(id, data);
+            setEditCash(null);
+            loadData();
+        } catch (err) {
+            alert('Failed to update cash movement: ' + err.message);
+        }
+    };
+
+    const initiateDelete = (activity) => {
+        setDeleteConfirm(activity);
+    };
+
+    const handleDelete = async () => {
+        if (!deleteConfirm) return;
+        try {
+            if (deleteConfirm.activityType === 'transaction') {
+                await api.deleteTransaction(deleteConfirm.id);
+            } else if (deleteConfirm.activityType === 'dividend') {
+                await api.deleteDividend(deleteConfirm.id);
+            } else if (deleteConfirm.activityType === 'cash') {
+                await api.deleteCashMovement(deleteConfirm.id);
+            }
+            setDeleteConfirm(null);
+            loadData();
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
         }
     };
 
@@ -175,6 +256,7 @@ function Activity() {
                                 <th>Description</th>
                                 <th>Account</th>
                                 <th className="text-right">Amount</th>
+                                <th className="text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -187,13 +269,66 @@ function Activity() {
                                     <td className={`text-right number ${activity.amount >= 0 ? 'text-positive' : 'text-negative'}`}>
                                         {formatCurrency(activity.amount)}
                                     </td>
+                                    <td className="text-right">
+                                        <div className="action-row justify-end">
+                                            <button
+                                                className="btn btn-icon"
+                                                onClick={() => handleEdit(activity)}
+                                                title="Edit"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                className="btn btn-icon text-negative"
+                                                onClick={() => initiateDelete(activity)}
+                                                title="Delete"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 )}
             </div>
-        </div>
+
+
+            {
+                editTransaction && (
+                    <TradeModal
+                        editingTransaction={editTransaction}
+                        holdings={holdings.filter(h => h.account_id === editTransaction.account_id)}
+                        prices={prices}
+                        onUpdate={handleUpdateTransaction}
+                        onClose={() => setEditTransaction(null)}
+                    />
+                )
+            }
+
+            {
+                editCash && (
+                    <CashMovementModal
+                        editingMovement={editCash}
+                        onUpdate={handleUpdateCash}
+                        onClose={() => setEditCash(null)}
+                    />
+                )
+            }
+
+            {
+                deleteConfirm && (
+                    <ConfirmModal
+                        title="Delete Activity"
+                        message={`Are you sure you want to delete this ${deleteConfirm.activityType}?`}
+                        confirmText="Delete"
+                        onConfirm={handleDelete}
+                        onCancel={() => setDeleteConfirm(null)}
+                    />
+                )
+            }
+        </div >
     );
 }
 

@@ -44,3 +44,13 @@ When facing total failure (blank page):
 2.  Verify it renders.
 3.  Add one layer of complexity at a time (e.g., fetch one API -> render; add Tabs -> render; add Modals -> render).
 This isolates exactly *where* the break occurs.
+
+## 5. UI State vs. Render Logic (The "Phantom Modal" Bug)
+**Issue:**
+The user clicked an "Edit" button, the internal state (`editTransaction`) correctly updated with the data, but nothing happened on screen.
+-   **Diagnosis:** The component updated its knowledge of *what* to edit, but the JSX return statement lacked the conditional logic to actually *render* the modal component when that state was present.
+
+**Lesson:**
+State updates alone do not drive UI changes unless the render method uses that state.
+-   **Check:** If `console.log` shows state updating but the UI doesn't change, check the `return (...)` block.
+-   **Pattern:** Always verify that every UI-triggering state (like `showModal`, `editItem`) has a corresponding `{ state && <Component /> }` block in the JSX.

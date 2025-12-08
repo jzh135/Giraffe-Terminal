@@ -3,16 +3,19 @@ import { useState, useEffect } from 'react';
 function TradeModal({
     initialTab = 'buy',
     initialHolding = null,
-    initialSymbol = null, // New prop
+    initialSymbol = null,
+    editingTransaction = null, // New: Pass transaction to edit
     holdings = [],
     prices = {},
     onBuy,
     onSell,
     onDividend,
+    onUpdate, // New: Callback for update
     onClose
 }) {
     const today = new Date().toISOString().split('T')[0];
     const [activeTab, setActiveTab] = useState(initialTab);
+    const isEditing = !!editingTransaction;
 
     // State to hold the list of transactions (rows)
     const [rows, setRows] = useState([]);
@@ -43,8 +46,26 @@ function TradeModal({
 
     // Initialize rows on mount or when critical props change
     useEffect(() => {
-        // If opening with a specific holding (likely for Sell from Holdings page)
-        if (initialHolding && initialTab === 'sell') {
+        if (editingTransaction) {
+            // Editing Mode
+            const type = editingTransaction.type === 'transaction' ? editingTransaction.tx_type : editingTransaction.type; // Normalized type
+            // Determine tab based on type
+            let tab = 'buy';
+            if (type === 'sell') tab = 'sell';
+            else if (type === 'dividend') tab = 'dividend';
+
+            setActiveTab(tab);
+            setRows([{
+                id: editingTransaction.id,
+                symbol: editingTransaction.symbol,
+                lotId: editingTransaction.holding_id || '',
+                shares: editingTransaction.shares || '',
+                price: editingTransaction.price || '',
+                amount: editingTransaction.amount || '', // For dividends
+                date: new Date(editingTransaction.date || today).toISOString().split('T')[0],
+                notes: editingTransaction.notes || ''
+            }]);
+        } else if (initialHolding && initialTab === 'sell') {
             const currentPrice = prices[initialHolding.symbol]?.price || '';
             setRows([{
                 id: Date.now(),
@@ -75,7 +96,7 @@ function TradeModal({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialHolding, initialTab, initialSymbol]);
+    }, [initialHolding, initialTab, initialSymbol, editingTransaction]);
 
     // ... rest of component ... make sure to update createRow usage if needed or leaving it as is.
     // Actually createRow inside the component is fine, I updated it to blindly use defaultSymbol but `rows.length === 0` block handles the specific setup better.
@@ -188,33 +209,45 @@ function TradeModal({
                     notes: row.notes
                 };
 
-                if (activeTab === 'buy') {
-                    await onBuy({
-                        symbol: row.symbol.toUpperCase(),
-                        shares: parseFloat(row.shares),
-                        price: parseFloat(row.price),
-                        cost_basis: parseFloat(row.shares) * parseFloat(row.price),
-                        purchase_date: row.date,
-                        notes: row.notes
-                    });
-                } else if (activeTab === 'sell') {
-                    // Verify lot validity
-                    const lot = holdings.find(h => h.id == row.lotId); // loose match for string/int
-                    if (!lot) continue;
+                const payload = { ...commonData };
+                if (activeTab === 'dividend') {
+                    payload.symbol = row.symbol.toUpperCase();
+                    payload.amount = parseFloat(row.amount);
+                } else {
+                    payload.symbol = row.symbol.toUpperCase();
+                    payload.shares = parseFloat(row.shares);
+                    payload.price = parseFloat(row.price);
+                    if (activeTab === 'sell') {
+                        payload.holding_id = row.lotId;
+                    }
+                }
 
-                    await onSell({
-                        holding_id: lot.id,
-                        shares: parseFloat(row.shares),
-                        price: parseFloat(row.price),
-                        ...commonData
+                if (isEditing) {
+                    // Update existing
+                    await onUpdate(editingTransaction.id, {
+                        ...payload,
+                        type: activeTab // preserve or update type
                     });
-                } else if (activeTab === 'dividend') {
-                    await onDividend({
-                        symbol: row.symbol.toUpperCase(),
-                        amount: parseFloat(row.amount),
-                        ...commonData
-                    });
+                } else {
+                    // Create new
+                    if (activeTab === 'buy') {
+                        await onBuy({
+                            ...payload,
+                            cost_basis: payload.shares * payload.price,
+                            purchase_date: payload.date
+                        });
+                    } else if (activeTab === 'sell') {
+                        // Verify lot validity
+                        const lot = holdings.find(h => h.id == row.lotId);
+                        if (!lot) continue;
 
+                        await onSell({
+                            ...payload,
+                            holding_id: lot.id
+                        });
+                    } else if (activeTab === 'dividend') {
+                        await onDividend(payload);
+                    }
                 }
             }
             onClose();
@@ -230,22 +263,24 @@ function TradeModal({
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1000px', width: '90%' }}>
                 <div className="modal-header">
-                    <h2 className="modal-title">Trade / Action</h2>
+                    <h2 className="modal-title">{isEditing ? 'Edit Transaction' : 'Trade / Action'}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                <div className="tabs" style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
-                    {['buy', 'sell', 'dividend'].map(tab => (
-                        <button
-                            key={tab}
-                            className={`tab ${activeTab === tab ? 'active' : ''}`}
-                            onClick={() => handleTabChange(tab)}
-                            style={{ flex: 1, textAlign: 'center' }}
-                        >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </button>
-                    ))}
-                </div>
+                {!isEditing && (
+                    <div className="tabs" style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
+                        {['buy', 'sell', 'dividend'].map(tab => (
+                            <button
+                                key={tab}
+                                className={`tab ${activeTab === tab ? 'active' : ''}`}
+                                onClick={() => handleTabChange(tab)}
+                                style={{ flex: 1, textAlign: 'center' }}
+                            >
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ overflowX: 'auto' }}>
@@ -257,6 +292,7 @@ function TradeModal({
                                             <th>Symbol</th>
                                             <th style={{ width: '120px' }}>Shares</th>
                                             <th style={{ width: '140px' }}>Price</th>
+                                            <th style={{ width: '140px' }}>Total</th>
                                             <th style={{ width: '150px' }}>Date</th>
                                             <th>Notes</th>
                                         </>
@@ -267,7 +303,9 @@ function TradeModal({
                                             <th style={{ width: '300px' }}>Tax Lot</th>
                                             <th style={{ width: '150px' }}>Shares</th>
                                             <th style={{ width: '140px' }}>Price</th>
+                                            <th style={{ width: '140px' }}>Total</th>
                                             <th style={{ width: '150px' }}>Date</th>
+                                            <th>Notes</th>
                                         </>
                                     )}
                                     {activeTab === 'dividend' && (
@@ -311,6 +349,14 @@ function TradeModal({
                                                         value={row.price}
                                                         onChange={e => updateRow(row.id, 'price', e.target.value)}
                                                         step="0.01" min="0" required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        className="form-input"
+                                                        value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
+                                                        readOnly
+                                                        tabIndex="-1"
                                                     />
                                                 </td>
                                                 <td>
@@ -363,21 +409,12 @@ function TradeModal({
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                                        <input
-                                                            type="number" className="form-input"
-                                                            value={row.shares}
-                                                            onChange={e => updateRow(row.id, 'shares', e.target.value)}
-                                                            step="any" min="0" required
-                                                            style={{ flex: 1 }}
-                                                        />
-                                                        {row.lotId && (
-                                                            <button type="button" className="btn btn-xs btn-secondary" onClick={() => {
-                                                                const lot = holdings.find(h => h.id == row.lotId);
-                                                                if (lot) updateRow(row.id, 'shares', lot.shares);
-                                                            }}>Max</button>
-                                                        )}
-                                                    </div>
+                                                    <input
+                                                        type="number" className="form-input"
+                                                        value={row.shares}
+                                                        onChange={e => updateRow(row.id, 'shares', e.target.value)}
+                                                        step="any" min="0" required
+                                                    />
                                                 </td>
                                                 <td>
                                                     <input
@@ -389,10 +426,26 @@ function TradeModal({
                                                 </td>
                                                 <td>
                                                     <input
+                                                        className="form-input"
+                                                        value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
+                                                        readOnly
+                                                        tabIndex="-1"
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
                                                         type="date" className="form-input"
                                                         value={row.date}
                                                         onChange={e => updateRow(row.id, 'date', e.target.value)}
                                                         required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        className="form-input"
+                                                        value={row.notes}
+                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
+                                                        placeholder="Optional"
                                                     />
                                                 </td>
                                             </>
@@ -442,7 +495,7 @@ function TradeModal({
 
 
                                         <td>
-                                            {rows.length > 1 && (
+                                            {!isEditing && rows.length > 1 && (
                                                 <button
                                                     type="button"
                                                     className="btn btn-icon text-negative"
@@ -459,22 +512,24 @@ function TradeModal({
                         </table>
                     </div>
 
-                    <div style={{ marginTop: '10px' }}>
-                        <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={addRow}
-                        >
-                            + Add Row
-                        </button>
-                    </div>
+                    {!isEditing && (
+                        <div style={{ marginTop: '10px' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={addRow}
+                            >
+                                + Add Row
+                            </button>
+                        </div>
+                    )}
 
                     <div className="modal-actions" style={{ marginTop: '20px' }}>
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Cancel
                         </button>
                         <button type="submit" className="btn btn-primary">
-                            Submit {rows.length} {rows.length === 1 ? 'Entry' : 'Entries'}
+                            {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
                         </button>
                     </div>
 
