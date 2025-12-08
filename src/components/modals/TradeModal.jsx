@@ -3,284 +3,478 @@ import { useState, useEffect } from 'react';
 function TradeModal({
     initialTab = 'buy',
     initialHolding = null,
+    initialSymbol = null, // New prop
     holdings = [],
     prices = {},
     onBuy,
     onSell,
+    onDividend,
     onClose
 }) {
     const today = new Date().toISOString().split('T')[0];
     const [activeTab, setActiveTab] = useState(initialTab);
 
-    // -- SHARED FORM STATE --
-    const [symbol, setSymbol] = useState('');
-    const [shares, setShares] = useState('');
-    const [price, setPrice] = useState('');
-    const [date, setDate] = useState(today);
-    const [notes, setNotes] = useState('');
+    // State to hold the list of transactions (rows)
+    const [rows, setRows] = useState([]);
 
-    // -- SELL SPECIFIC STATE --
-    const [selectedLotId, setSelectedLotId] = useState(initialHolding ? initialHolding.id : '');
-
-    // Initialize state based on props
-    useEffect(() => {
-        if (initialHolding) {
-            setSymbol(initialHolding.symbol);
-            setSelectedLotId(initialHolding.id);
-            setActiveTab('sell');
-        }
-    }, [initialHolding]);
-
-    // Reset lot selection when switching symbols in Sell tab
-    useEffect(() => {
-        if (activeTab === 'sell' && !initialHolding) {
-            setSelectedLotId('');
-        }
-    }, [symbol, activeTab]);
-
-    // Derived State
-    const currentPrice = prices[symbol]?.price || 0;
-
-    // Update price when symbol changes (if not set manually yet) OR when switching tabs
-    useEffect(() => {
-        if (currentPrice && !price) {
-            setPrice(currentPrice.toString());
-        }
-    }, [symbol, currentPrice]);
-
-    // Determine Active Lot for Sell
-    const activeLot = activeTab === 'sell'
-        ? (initialHolding || holdings.find(h => h.id === parseInt(selectedLotId)))
-        : null;
-
-    // Derived Selection Lists for Sell Tab
+    // Unique symbols for dropdowns
     const uniqueSymbols = [...new Set(holdings.map(h => h.symbol))].sort();
-    const availableLots = symbol ? holdings.filter(h => h.symbol === symbol) : [];
 
-    // Calculations
-    const totalValue = shares && price ? (parseFloat(shares) * parseFloat(price)).toFixed(2) : '';
+    // Helper to create a new empty row based on the current tab
+    const createRow = (tab) => {
+        const base = { id: Date.now() + Math.random(), date: today, notes: '' };
 
-    // Sell specific calcs
-    const costBasisPerShare = activeLot ? activeLot.cost_basis / activeLot.shares : 0;
-    const gainLoss = (activeTab === 'sell' && shares && price)
-        ? (parseFloat(shares) * parseFloat(price)) - (parseFloat(shares) * costBasisPerShare)
-        : 0;
+        // Use initialSymbol if available and we are creating the FIRST row or relevant logic
+        // But createRow is generic. We can set defaults when initializing state.
+        const defaultSymbol = initialSymbol || '';
 
-    function handleSubmit(e) {
+        switch (tab) {
+            case 'buy':
+                return { ...base, symbol: defaultSymbol, shares: '', price: '' };
+            case 'sell':
+                return { ...base, symbol: defaultSymbol, lotId: '', shares: '', price: '' };
+            case 'dividend':
+                return { ...base, symbol: defaultSymbol, amount: '' };
+
+            default:
+                return base;
+        }
+    };
+
+    // Initialize rows on mount or when critical props change
+    useEffect(() => {
+        // If opening with a specific holding (likely for Sell from Holdings page)
+        if (initialHolding && initialTab === 'sell') {
+            const currentPrice = prices[initialHolding.symbol]?.price || '';
+            setRows([{
+                id: Date.now(),
+                symbol: initialHolding.symbol,
+                lotId: initialHolding.id,
+                shares: '',
+                price: currentPrice,
+                date: today,
+                notes: ''
+            }]);
+            setActiveTab('sell');
+        } else {
+            // Default initialization
+            if (rows.length === 0) {
+                // Determine symbol to use for the first row
+                const startSymbol = initialHolding ? initialHolding.symbol : (initialSymbol || '');
+                const firstRow = createRow(initialTab);
+                if (startSymbol) firstRow.symbol = startSymbol;
+
+                // Pre-fill price if symbol is available
+                if (startSymbol && (initialTab === 'buy' || initialTab === 'sell')) {
+                    const p = prices[startSymbol]?.price;
+                    if (p) firstRow.price = p;
+                }
+
+                setRows([firstRow]);
+                setActiveTab(initialTab);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialHolding, initialTab, initialSymbol]);
+
+    // ... rest of component ... make sure to update createRow usage if needed or leaving it as is.
+    // Actually createRow inside the component is fine, I updated it to blindly use defaultSymbol but `rows.length === 0` block handles the specific setup better.
+    // I need to ensure `createRow` (used by addRow) also respects `initialSymbol` OR relies on the "copy previous row" logic I added in previous turn.
+    // The previous turn added "copy previous row" logic to `addRow`. So subsequent rows will copy the first row's symbol.
+    // Perfect.
+
+    // ... (rest of the file is large, I should only replace the top part or allow multiple replacements)
+    // I'll stick to replacing the whole file or huge chunk to be safe given the prop change.
+    // Wait, I can just replace the top part if I'm careful.
+
+    /* Using multi_replace to be precise */
+
+    // Handle Tab Switching
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        setRows([createRow(tab)]);
+    };
+
+    // Row Update Handler
+    const updateRow = (id, field, value) => {
+        setRows(prev => prev.map(row => {
+            if (row.id !== id) return row;
+
+            const updated = { ...row, [field]: value };
+
+            // Special logic for Sell tab: If symbol changes, clear lotId
+            if (activeTab === 'sell' && field === 'symbol') {
+                updated.lotId = '';
+                // Try to pre-fill price
+                const price = prices[value]?.price;
+                if (price) updated.price = price;
+            }
+
+            // Special logic for Buy tab: If symbol changes, pre-fill price
+            if (activeTab === 'buy' && field === 'symbol') {
+                const price = prices[value]?.price;
+                if (price) updated.price = price;
+            }
+
+            return updated;
+        }));
+    };
+
+    const removeRow = (id) => {
+        if (rows.length > 1) {
+            setRows(prev => prev.filter(r => r.id !== id));
+        }
+    };
+
+    const addRow = () => {
+        setRows(prev => {
+            const lastRow = prev[prev.length - 1];
+            const newRow = createRow(activeTab);
+
+            // Auto-fill symbol/price from previous row if available
+            if (lastRow && (activeTab === 'buy' || activeTab === 'sell' || activeTab === 'dividend')) {
+                if (lastRow.symbol) {
+                    newRow.symbol = lastRow.symbol;
+
+                    // For Buy tab, also copy the price if it was set
+                    if (activeTab === 'buy' && lastRow.price) {
+                        newRow.price = lastRow.price;
+                    }
+                    // For Sell tab, we don't copy lotId because it must be unique/specific to the lot
+                    // But we can trigger price lookup if needed (though existing logic might handle it on change)
+                    // Actually, we should probably look up the price again just in case, but here we just copy symbol. 
+                    // The user still needs to select a lot.
+
+                    // If we are in Sell tab, we might want to pre-fill the price too if it's the same symbol
+                    if (activeTab === 'sell') {
+                        const currentPrice = prices[lastRow.symbol]?.price;
+                        if (currentPrice) newRow.price = currentPrice;
+                    }
+                }
+            }
+
+            return [...prev, newRow];
+        });
+    };
+
+    // Helpers for Render
+    const getAvailableLots = (symbol) => {
+        if (!symbol) return [];
+        return holdings.filter(h => h.symbol === symbol).sort((a, b) => new Date(a.purchase_date) - new Date(b.purchase_date));
+    };
+
+    // Submit Handler
+    async function handleSubmit(e) {
         e.preventDefault();
 
-        const commonData = {
-            shares: parseFloat(shares),
-            price: parseFloat(price),
-            date,
-            notes: notes.trim() || null
-        };
+        // Process all rows
+        // We'll execute them sequentially to avoid race conditions in the backend/loading states if any
+        // Ideally we'd have a batch API, but for now we loop.
 
-        if (activeTab === 'buy') {
-            onBuy({
-                symbol: symbol.toUpperCase(),
-                cost_basis: commonData.shares * commonData.price, // Calculate total cost
-                purchase_date: commonData.date,
-                ...commonData
-            });
-        } else {
-            if (!activeLot) {
-                alert('Please select a tax lot to sell.');
-                return;
+        const validRows = rows.filter(r => {
+            if (activeTab === 'buy') return r.symbol && r.shares && r.price;
+            if (activeTab === 'sell') return r.lotId && r.shares && r.price;
+            if (activeTab === 'dividend') return r.symbol && r.amount;
+
+            return false;
+        });
+
+        if (validRows.length === 0) return;
+
+        try {
+            for (const row of validRows) {
+                const commonData = {
+                    date: row.date,
+                    notes: row.notes
+                };
+
+                if (activeTab === 'buy') {
+                    await onBuy({
+                        symbol: row.symbol.toUpperCase(),
+                        shares: parseFloat(row.shares),
+                        price: parseFloat(row.price),
+                        cost_basis: parseFloat(row.shares) * parseFloat(row.price),
+                        purchase_date: row.date,
+                        notes: row.notes
+                    });
+                } else if (activeTab === 'sell') {
+                    // Verify lot validity
+                    const lot = holdings.find(h => h.id == row.lotId); // loose match for string/int
+                    if (!lot) continue;
+
+                    await onSell({
+                        holding_id: lot.id,
+                        shares: parseFloat(row.shares),
+                        price: parseFloat(row.price),
+                        ...commonData
+                    });
+                } else if (activeTab === 'dividend') {
+                    await onDividend({
+                        symbol: row.symbol.toUpperCase(),
+                        amount: parseFloat(row.amount),
+                        ...commonData
+                    });
+
+                }
             }
-            if (parseFloat(shares) > activeLot.shares) {
-                alert(`Cannot sell more shares than available (${activeLot.shares}).`);
-                return;
-            }
-            onSell({
-                holding_id: activeLot.id,
-                ...commonData
-            });
+            onClose();
+        } catch (err) {
+            console.error(err);
+            alert("Error processing trades: " + err.message);
         }
     }
 
-    function resetForm() {
-        setSymbol('');
-        setShares('');
-        setPrice('');
-        setDate(today);
-        setNotes('');
-        setSelectedLotId('');
-    }
+    // --- Render Helpers ---
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1000px', width: '90%' }}>
                 <div className="modal-header">
-                    <h2 className="modal-title">Trade Stock</h2>
+                    <h2 className="modal-title">Trade / Action</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                {/* TABS */}
                 <div className="tabs" style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
-                    <button
-                        className={`tab ${activeTab === 'buy' ? 'active' : ''}`}
-                        onClick={() => { setActiveTab('buy'); resetForm(); }}
-                        style={{ flex: 1, textAlign: 'center' }}
-                    >
-                        Buy
-                    </button>
-                    <button
-                        className={`tab ${activeTab === 'sell' ? 'active' : ''}`}
-                        onClick={() => { setActiveTab('sell'); resetForm(); }}
-                        style={{ flex: 1, textAlign: 'center' }}
-                    >
-                        Sell
-                    </button>
+                    {['buy', 'sell', 'dividend'].map(tab => (
+                        <button
+                            key={tab}
+                            className={`tab ${activeTab === tab ? 'active' : ''}`}
+                            onClick={() => handleTabChange(tab)}
+                            style={{ flex: 1, textAlign: 'center' }}
+                        >
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </button>
+                    ))}
                 </div>
 
                 <form onSubmit={handleSubmit}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table" style={{ minWidth: activeTab === 'sell' ? '900px' : '800px' }}>
+                            <thead>
+                                <tr>
+                                    {activeTab === 'buy' && (
+                                        <>
+                                            <th>Symbol</th>
+                                            <th style={{ width: '120px' }}>Shares</th>
+                                            <th style={{ width: '140px' }}>Price</th>
+                                            <th style={{ width: '150px' }}>Date</th>
+                                            <th>Notes</th>
+                                        </>
+                                    )}
+                                    {activeTab === 'sell' && (
+                                        <>
+                                            <th style={{ width: '120px' }}>Symbol</th>
+                                            <th style={{ width: '300px' }}>Tax Lot</th>
+                                            <th style={{ width: '150px' }}>Shares</th>
+                                            <th style={{ width: '140px' }}>Price</th>
+                                            <th style={{ width: '150px' }}>Date</th>
+                                        </>
+                                    )}
+                                    {activeTab === 'dividend' && (
+                                        <>
+                                            <th>Symbol</th>
+                                            <th style={{ width: '140px' }}>Amount</th>
+                                            <th style={{ width: '150px' }}>Date</th>
+                                            <th>Notes</th>
+                                        </>
+                                    )}
 
-                    {/* SYMBOL SELECTION */}
-                    <div className="form-group">
-                        <label className="form-label">Symbol *</label>
-                        {activeTab === 'buy' ? (
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={symbol}
-                                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                                placeholder="e.g., AAPL"
-                                required
-                                autoFocus
-                            />
-                        ) : (
-                            <select
-                                className="form-input"
-                                value={symbol}
-                                onChange={e => setSymbol(e.target.value)}
-                                required
-                                disabled={!!initialHolding} // Lock symbol if selling specific lot
-                            >
-                                <option value="">-- Select Stock --</option>
-                                {uniqueSymbols.map(sym => (
-                                    <option key={sym} value={sym}>{sym}</option>
+                                    <th style={{ width: '50px' }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row) => (
+                                    <tr key={row.id}>
+                                        {/* BUY ROW */}
+                                        {activeTab === 'buy' && (
+                                            <>
+                                                <td>
+                                                    <input
+                                                        className="form-input"
+                                                        value={row.symbol}
+                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value.toUpperCase())}
+                                                        placeholder="AAPL"
+                                                        required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number" className="form-input"
+                                                        value={row.shares}
+                                                        onChange={e => updateRow(row.id, 'shares', e.target.value)}
+                                                        step="any" min="0" required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number" className="form-input"
+                                                        value={row.price}
+                                                        onChange={e => updateRow(row.id, 'price', e.target.value)}
+                                                        step="0.01" min="0" required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="date" className="form-input"
+                                                        value={row.date}
+                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                        required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        className="form-input"
+                                                        value={row.notes}
+                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
+                                                        placeholder="Optional"
+                                                    />
+                                                </td>
+                                            </>
+                                        )}
+
+                                        {/* SELL ROW */}
+                                        {activeTab === 'sell' && (
+                                            <>
+                                                <td>
+                                                    <select
+                                                        className="form-input"
+                                                        value={row.symbol}
+                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value)}
+                                                        required
+                                                    >
+                                                        <option value="">Select...</option>
+                                                        {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <select
+                                                        className="form-input"
+                                                        value={row.lotId}
+                                                        onChange={e => updateRow(row.id, 'lotId', e.target.value)}
+                                                        required
+                                                        disabled={!row.symbol}
+                                                    >
+                                                        <option value="">Select Lot...</option>
+                                                        {getAvailableLots(row.symbol).map(lot => (
+                                                            <option key={lot.id} value={lot.id}>
+                                                                {new Date(lot.purchase_date).toLocaleDateString()} - {lot.shares}sh (${(lot.cost_basis / lot.shares).toFixed(2)})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.shares}
+                                                            onChange={e => updateRow(row.id, 'shares', e.target.value)}
+                                                            step="any" min="0" required
+                                                            style={{ flex: 1 }}
+                                                        />
+                                                        {row.lotId && (
+                                                            <button type="button" className="btn btn-xs btn-secondary" onClick={() => {
+                                                                const lot = holdings.find(h => h.id == row.lotId);
+                                                                if (lot) updateRow(row.id, 'shares', lot.shares);
+                                                            }}>Max</button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number" className="form-input"
+                                                        value={row.price}
+                                                        onChange={e => updateRow(row.id, 'price', e.target.value)}
+                                                        step="0.01" min="0" required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="date" className="form-input"
+                                                        value={row.date}
+                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                        required
+                                                    />
+                                                </td>
+                                            </>
+                                        )}
+
+                                        {/* DIVIDEND ROW */}
+                                        {activeTab === 'dividend' && (
+                                            <>
+                                                <td>
+                                                    <select
+                                                        className="form-input"
+                                                        value={row.symbol}
+                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value)}
+                                                        required
+                                                    >
+                                                        <option value="">Select...</option>
+                                                        {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number" className="form-input"
+                                                        value={row.amount}
+                                                        onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                                                        step="0.01" min="0" required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="date" className="form-input"
+                                                        value={row.date}
+                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                        required
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        className="form-input"
+                                                        value={row.notes}
+                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
+                                                        placeholder="Optional"
+                                                    />
+                                                </td>
+                                            </>
+                                        )}
+
+
+
+                                        <td>
+                                            {rows.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-icon text-negative"
+                                                    onClick={() => removeRow(row.id)}
+                                                    title="Remove Row"
+                                                >
+                                                    &times;
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
                                 ))}
-                            </select>
-                        )}
+                            </tbody>
+                        </table>
                     </div>
 
-                    {/* SELL: LOT SELECTION */}
-                    {activeTab === 'sell' && symbol && !initialHolding && (
-                        <div className="form-group">
-                            <label className="form-label">Select Tax Lot *</label>
-                            <select
-                                className="form-input"
-                                value={selectedLotId}
-                                onChange={e => setSelectedLotId(e.target.value)}
-                                required
-                            >
-                                <option value="">-- Choose Lot --</option>
-                                {availableLots.map(lot => (
-                                    <option key={lot.id} value={lot.id}>
-                                        {new Date(lot.purchase_date).toLocaleDateString()} - {lot.shares} sh (Basis: ${(lot.cost_basis / lot.shares).toFixed(2)})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    {/* SELL: LOT INFO */}
-                    {activeTab === 'sell' && activeLot && (
-                        <div className="card" style={{ padding: '10px', marginBottom: '15px', background: '#f5f5f5' }}>
-                            <div className="flex justify-between" style={{ fontSize: '0.9rem' }}>
-                                <span className="text-muted">Available Shares:</span>
-                                <strong>{activeLot.shares}</strong>
-                            </div>
-                            <div className="flex justify-between" style={{ fontSize: '0.9rem' }}>
-                                <span className="text-muted">Cost Basis:</span>
-                                <strong>${(activeLot.cost_basis / activeLot.shares).toFixed(2)}/sh</strong>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* SHARES */}
-                    <div className="form-group">
-                        <label className="form-label">Shares *</label>
-                        <div className="flex gap-sm">
-                            <input
-                                type="number"
-                                className="form-input"
-                                value={shares}
-                                onChange={(e) => setShares(e.target.value)}
-                                placeholder="0"
-                                step="any"
-                                min="0"
-                                required
-                                style={{ flex: 1 }}
-                            />
-                            {activeTab === 'sell' && activeLot && (
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShares(activeLot.shares)}
-                                >
-                                    Max
-                                </button>
-                            )}
-                        </div>
+                    <div style={{ marginTop: '10px' }}>
+                        <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={addRow}
+                        >
+                            + Add Row
+                        </button>
                     </div>
 
-                    {/* PRICE */}
-                    <div className="form-group">
-                        <label className="form-label">Price per Share *</label>
-                        <input
-                            type="number"
-                            className="form-input"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            placeholder="0.00"
-                            step="0.01"
-                            min="0"
-                            required
-                        />
-                        {totalValue && (
-                            <div className="text-right text-muted" style={{ marginTop: 5 }}>
-                                Total {activeTab === 'buy' ? 'Cost' : 'Proceeds'}: <strong>${totalValue}</strong>
-                            </div>
-                        )}
-                        {activeTab === 'sell' && gainLoss !== 0 && (
-                            <div className={`text-right ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                Est. Gain/Loss: {gainLoss >= 0 ? '+' : ''}${gainLoss.toFixed(2)}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* DATE */}
-                    <div className="form-group">
-                        <label className="form-label">Date *</label>
-                        <input
-                            type="date"
-                            className="form-input"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            required
-                        />
-                    </div>
-
-                    {/* NOTES */}
-                    <div className="form-group">
-                        <label className="form-label">Notes</label>
-                        <input
-                            type="text"
-                            className="form-input"
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Optional"
-                        />
-                    </div>
-
-                    <div className="modal-actions">
+                    <div className="modal-actions" style={{ marginTop: '20px' }}>
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Cancel
                         </button>
-                        <button type="submit" className={`btn ${activeTab === 'buy' ? 'btn-primary' : 'btn-danger'}`}>
-                            {activeTab === 'buy' ? 'Buy Stock' : 'Sell Stock'}
+                        <button type="submit" className="btn btn-primary">
+                            Submit {rows.length} {rows.length === 1 ? 'Entry' : 'Entries'}
                         </button>
                     </div>
 

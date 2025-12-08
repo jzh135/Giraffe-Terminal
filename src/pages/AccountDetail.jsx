@@ -65,7 +65,6 @@ function AccountDetail() {
         try {
             await createHolding({ ...data, account_id: id });
             await loadData();
-            setTradeModalOpen(false);
         } catch (err) {
             alert('Failed to add holding: ' + err.message);
         }
@@ -75,8 +74,6 @@ function AccountDetail() {
         try {
             await sellStock({ ...data, account_id: id });
             await loadData();
-            setTradeModalOpen(false);
-            setSelectedHolding(null);
         } catch (err) {
             alert('Failed to sell stock: ' + err.message);
         }
@@ -86,7 +83,6 @@ function AccountDetail() {
         try {
             await createCashMovement({ ...data, account_id: id });
             await loadData();
-            setCashModalOpen(false);
         } catch (err) {
             alert('Failed to add cash movement: ' + err.message);
         }
@@ -96,7 +92,6 @@ function AccountDetail() {
         try {
             await createDividend({ ...data, account_id: id });
             await loadData();
-            setDividendModalOpen(false);
         } catch (err) {
             alert('Failed to add dividend: ' + err.message);
         }
@@ -186,12 +181,11 @@ function AccountDetail() {
                         setTradeTab('buy');
                         setTradeModalOpen(true);
                     }}>
-                        Trade Stock
+                        Trade
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setDividendModalOpen(true)}>
-                        Record Dividend
-                    </button>
-                    <button className="btn btn-secondary" onClick={() => setCashModalOpen(true)}>
+                    <button className="btn btn-secondary" onClick={() => {
+                        setCashModalOpen(true);
+                    }}>
                         Cash Movement
                     </button>
                 </div>
@@ -435,6 +429,7 @@ function AccountDetail() {
                     prices={prices}
                     onBuy={handleAddHolding}
                     onSell={handleSell}
+                    onDividend={handleDividend}
                     onClose={() => {
                         setTradeModalOpen(false);
                         setSelectedHolding(null);
@@ -442,19 +437,10 @@ function AccountDetail() {
                 />
             )}
 
-
             {cashModalOpen && (
                 <CashMovementModal
                     onSave={handleCashMovement}
                     onClose={() => setCashModalOpen(false)}
-                />
-            )}
-
-            {dividendModalOpen && (
-                <DividendModal
-                    holdings={holdings}
-                    onSave={handleDividend}
-                    onClose={() => setDividendModalOpen(false)}
                 />
             )}
 

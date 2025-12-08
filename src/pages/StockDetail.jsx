@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api';
+import TradeModal from '../components/modals/TradeModal';
 
 function StockDetail() {
     const { symbol } = useParams();
     const navigate = useNavigate();
-    const [holdings, setHoldings] = useState([]);
+    const [holdings, setHoldings] = useState([]); // Filtered for this stock
+    const [allHoldings, setAllHoldings] = useState([]); // All holdings for modal
     const [transactions, setTransactions] = useState([]);
     const [price, setPrice] = useState(null);
+    const [allPrices, setAllPrices] = useState({}); // For modal
     const [loading, setLoading] = useState(true);
+
+    // Modal State
+    const [tradeModalOpen, setTradeModalOpen] = useState(false);
+    const [tradeTab, setTradeTab] = useState('buy');
 
     useEffect(() => {
         loadData();
@@ -16,21 +23,59 @@ function StockDetail() {
 
     async function loadData() {
         try {
-            const [holdingsData, transactionsData, priceData] = await Promise.all([
+            const [holdingsData, transactionsData, priceData, allPricesData] = await Promise.all([
                 api.getHoldings(),
                 api.getTransactions({ symbol }),
-                api.fetchPrice(symbol) // Ensure we get the latest price
+                api.fetchPrice(symbol),
+                api.getPrices()
             ]);
 
             // Filter holdings for this symbol
             const symbolHoldings = holdingsData.filter(h => h.symbol === symbol);
             setHoldings(symbolHoldings);
+            setAllHoldings(holdingsData);
             setTransactions(transactionsData);
             setPrice(priceData);
+            setAllPrices(allPricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
         } catch (err) {
             console.error('Failed to load stock data:', err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function handleTradeAction(tab) {
+        setTradeTab(tab);
+        setTradeModalOpen(true);
+    }
+
+    async function handleBuy(data) {
+        try {
+            await api.createHolding(data);
+            await loadData();
+            setTradeModalOpen(false);
+        } catch (err) {
+            alert('Failed to buy stock: ' + err.message);
+        }
+    }
+
+    async function handleSell(data) {
+        try {
+            await api.sellStock(data);
+            await loadData();
+            setTradeModalOpen(false);
+        } catch (err) {
+            alert('Failed to sell stock: ' + err.message);
+        }
+    }
+
+    async function handleDividend(data) {
+        try {
+            await api.createDividend(data);
+            await loadData();
+            setTradeModalOpen(false);
+        } catch (err) {
+            alert('Failed to record dividend: ' + err.message);
         }
     }
 
@@ -83,7 +128,7 @@ function StockDetail() {
                     </h1>
                 </div>
                 <div className="action-row">
-                    {/* Add actions here if needed */}
+                    <button className="btn btn-primary" onClick={() => handleTradeAction('buy')}>Trade</button>
                 </div>
             </div>
 
@@ -195,6 +240,19 @@ function StockDetail() {
                     </div>
                 </div>
             </div>
+
+            {tradeModalOpen && (
+                <TradeModal
+                    initialTab={tradeTab}
+                    initialSymbol={symbol}
+                    holdings={allHoldings}
+                    prices={allPrices}
+                    onBuy={handleBuy}
+                    onSell={handleSell}
+                    onDividend={handleDividend}
+                    onClose={() => setTradeModalOpen(false)}
+                />
+            )}
         </div>
     );
 }
