@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAdminStats, resetDatabase, restartServer, clearPriceCache, getAppSettings, updateAppSettings } from '../api';
+import { getAdminStats, resetDatabase, restartServer, getAppSettings, updateAppSettings } from '../api';
 import './Developer.css';
 
 function Developer() {
@@ -9,7 +9,6 @@ function Developer() {
     const [resetInput, setResetInput] = useState('');
     const [resetting, setResetting] = useState(false);
     const [restarting, setRestarting] = useState(false);
-    const [clearingCache, setClearingCache] = useState(false);
 
     // Branding state
     const [appSettings, setAppSettings] = useState(null);
@@ -152,24 +151,6 @@ function Developer() {
             }, 3000);
         }
         // Note: we don't set restarting to false because the page will reload
-    };
-
-    const handleClearCache = async () => {
-        if (!confirm('Are you sure you want to clear the price cache? This will remove all cached stock prices.')) {
-            return;
-        }
-
-        setClearingCache(true);
-        try {
-            await clearPriceCache();
-            await loadStats(); // Refresh stats to show 0 cached prices
-            alert('Price cache cleared successfully!');
-        } catch (err) {
-            console.error(err);
-            alert('Failed to clear cache: ' + err.message);
-        } finally {
-            setClearingCache(false);
-        }
     };
 
     const formatBytes = (bytes) => {
@@ -401,10 +382,9 @@ function Developer() {
                         />
                         <StatCard
                             icon="🏷️"
-                            label="Cached Prices"
+                            label="Stocks"
                             value={stats.prices}
                             gradient="linear-gradient(135deg, #30cfd0 0%, #330867 100%)"
-                            onClick={handleClearCache}
                         />
                     </div>
                 ) : (
