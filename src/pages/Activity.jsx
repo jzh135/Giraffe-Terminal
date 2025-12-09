@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as api from '../api';
 import TradeModal from '../components/modals/TradeModal';
 import CashMovementModal from '../components/modals/CashMovementModal';
 import ConfirmModal from '../components/modals/ConfirmModal';
+import { useSort } from '../hooks/useSort';
 
 function Activity() {
     const [transactions, setTransactions] = useState([]);
@@ -54,7 +55,7 @@ function Activity() {
     }
 
     // Combine all activities
-    const allActivities = [
+    const allActivities = useMemo(() => [
         ...transactions.map(t => ({
             ...t,
             activityType: 'transaction',
@@ -73,16 +74,19 @@ function Activity() {
             description: `${c.type.charAt(0).toUpperCase() + c.type.slice(1)}`,
             amount: c.amount
         }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+    ], [transactions, dividends, cashMovements]);
 
-    const filteredActivities = activeTab === 'all'
-        ? allActivities
-        : allActivities.filter(a => {
+    const filteredActivities = useMemo(() => {
+        if (activeTab === 'all') return allActivities;
+        return allActivities.filter(a => {
             if (activeTab === 'trades') return a.activityType === 'transaction';
             if (activeTab === 'dividends') return a.activityType === 'dividend';
             if (activeTab === 'cash') return a.activityType === 'cash';
             return true;
         });
+    }, [allActivities, activeTab]);
+
+    const { sortedData, sortConfig, requestSort, getSortIndicator } = useSort(filteredActivities, { key: 'date', direction: 'desc' });
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-US', {
@@ -117,6 +121,16 @@ function Activity() {
                 return <span className="badge badge-neutral">OTHER</span>;
         }
     };
+
+    const SortableHeader = ({ column, label, className = '' }) => (
+        <th
+            className={`${className} sortable ${sortConfig.key === column ? 'sorted' : ''}`}
+            onClick={() => requestSort(column)}
+        >
+            {label}
+            <span className="sort-indicator">{getSortIndicator(column)}</span>
+        </th>
+    );
 
     const handleEdit = (activity) => {
         if (activity.activityType === 'transaction' || activity.activityType === 'dividend') {
@@ -251,16 +265,16 @@ function Activity() {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Description</th>
-                                <th>Account</th>
-                                <th className="text-right">Amount</th>
+                                <SortableHeader column="date" label="Date" />
+                                <SortableHeader column="activityType" label="Type" />
+                                <SortableHeader column="description" label="Description" />
+                                <SortableHeader column="account_name" label="Account" />
+                                <SortableHeader column="amount" label="Amount" className="text-right" />
                                 <th className="text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredActivities.map((activity, index) => (
+                            {sortedData.map((activity, index) => (
                                 <tr key={`${activity.activityType}-${activity.id}-${index}`}>
                                     <td>{formatDate(activity.date)}</td>
                                     <td>{getActivityBadge(activity)}</td>

@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import StockSplitModal from '../components/modals/StockSplitModal';
+import { useSort } from '../hooks/useSort';
 
 function Holdings() {
     const navigate = useNavigate();
     const [holdings, setHoldings] = useState([]);
     const [prices, setPrices] = useState({});
     const [accounts, setAccounts] = useState([]);
+    const [dividends, setDividends] = useState([]);
+    const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState('');
@@ -19,15 +22,20 @@ function Holdings() {
 
     async function loadData() {
         try {
-            const [holdingsData, pricesData, accountsData] = await Promise.all([
+            const filters = selectedAccount ? { account_id: selectedAccount } : {};
+            const [holdingsData, pricesData, accountsData, dividendsData, transactionsData] = await Promise.all([
                 api.getHoldings(selectedAccount || undefined),
                 api.getPrices(),
-                api.getAccounts()
+                api.getAccounts(),
+                api.getDividends(filters),
+                api.getTransactions(filters)
             ]);
 
             setHoldings(holdingsData);
             setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
             setAccounts(accountsData);
+            setDividends(Array.isArray(dividendsData) ? dividendsData : []);
+            setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
         } catch (err) {
             console.error('Failed to load holdings:', err);
         } finally {
@@ -57,28 +65,65 @@ function Holdings() {
         }
     }
 
-    // Group by symbol
-    const holdingsBySymbol = {};
-    holdings.forEach(h => {
-        if (!holdingsBySymbol[h.symbol]) {
-            holdingsBySymbol[h.symbol] = {
-                symbol: h.symbol,
-                lots: [],
-                totalShares: 0,
-                totalCostBasis: 0
-            };
-        }
-        holdingsBySymbol[h.symbol].lots.push(h);
-        holdingsBySymbol[h.symbol].totalShares += h.shares;
-        holdingsBySymbol[h.symbol].totalCostBasis += h.cost_basis;
-    });
+    // Calculate dividends by symbol
+    const dividendsBySymbol = useMemo(() => {
+        const result = {};
+        dividends.forEach(d => {
+            if (!result[d.symbol]) result[d.symbol] = 0;
+            result[d.symbol] += d.amount;
+        });
+        return result;
+    }, [dividends]);
 
-    // Sort by market value (descending)
-    const sortedSymbols = Object.values(holdingsBySymbol).sort((a, b) => {
-        const aValue = a.totalShares * (prices[a.symbol]?.price || 0);
-        const bValue = b.totalShares * (prices[b.symbol]?.price || 0);
-        return bValue - aValue;
-    });
+    // Calculate realized gains by symbol
+    const realizedGainsBySymbol = useMemo(() => {
+        const result = {};
+        transactions.forEach(t => {
+            if (t.type === 'sell' && t.realized_gain != null) {
+                if (!result[t.symbol]) result[t.symbol] = 0;
+                result[t.symbol] += t.realized_gain;
+            }
+        });
+        return result;
+    }, [transactions]);
+
+    // Build enriched data for sorting
+    const enrichedHoldings = useMemo(() => {
+        const holdingsBySymbol = {};
+        holdings.forEach(h => {
+            if (!holdingsBySymbol[h.symbol]) {
+                holdingsBySymbol[h.symbol] = { symbol: h.symbol, lots: [], totalShares: 0, totalCostBasis: 0 };
+            }
+            holdingsBySymbol[h.symbol].lots.push(h);
+            holdingsBySymbol[h.symbol].totalShares += h.shares;
+            holdingsBySymbol[h.symbol].totalCostBasis += h.cost_basis;
+        });
+
+        return Object.values(holdingsBySymbol).map(h => {
+            const price = prices[h.symbol]?.price || 0;
+            const name = prices[h.symbol]?.name || h.symbol;
+            const marketValue = h.totalShares * price;
+            const gainLoss = marketValue - h.totalCostBasis;
+            const gainLossPercent = h.totalCostBasis > 0 ? (gainLoss / h.totalCostBasis) * 100 : 0;
+            const avgCost = h.totalShares > 0 ? h.totalCostBasis / h.totalShares : 0;
+            const symbolDividends = dividendsBySymbol[h.symbol] || 0;
+            const symbolRealizedGain = realizedGainsBySymbol[h.symbol] || 0;
+            const totalRealized = symbolDividends + symbolRealizedGain;
+
+            return {
+                ...h,
+                name,
+                price,
+                marketValue,
+                gainLoss,
+                gainLossPercent,
+                avgCost,
+                totalRealized
+            };
+        });
+    }, [holdings, prices, dividendsBySymbol, realizedGainsBySymbol]);
+
+    const { sortedData, sortConfig, requestSort, getSortIndicator } = useSort(enrichedHoldings, { key: 'marketValue', direction: 'desc' });
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-US', {
@@ -92,6 +137,16 @@ function Holdings() {
         const sign = value >= 0 ? '+' : '';
         return `${sign}${value.toFixed(2)}%`;
     };
+
+    const SortableHeader = ({ column, label, className = '' }) => (
+        <th
+            className={`${className} sortable ${sortConfig.key === column ? 'sorted' : ''}`}
+            onClick={() => requestSort(column)}
+        >
+            {label}
+            <span className="sort-indicator">{getSortIndicator(column)}</span>
+        </th>
+    );
 
     if (loading) {
         return (
@@ -135,7 +190,7 @@ function Holdings() {
                 </select>
             </div>
 
-            {sortedSymbols.length === 0 ? (
+            {sortedData.length === 0 ? (
                 <div className="card">
                     <div className="empty-state">
                         <div className="empty-state-icon">📈</div>
@@ -148,45 +203,40 @@ function Holdings() {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>Symbol</th>
-                                <th className="text-right">Shares</th>
-                                <th className="text-right">Price</th>
-                                <th className="text-right">Market Value</th>
-                                <th className="text-right">Avg Cost</th>
-                                <th className="text-right">Total Gain/Loss</th>
+                                <SortableHeader column="symbol" label="Symbol" />
+                                <SortableHeader column="totalShares" label="Shares" className="text-right" />
+                                <SortableHeader column="price" label="Price" className="text-right" />
+                                <SortableHeader column="marketValue" label="Market Value" className="text-right" />
+                                <SortableHeader column="avgCost" label="Avg Cost" className="text-right" />
+                                <SortableHeader column="gainLoss" label="Unrealized G/L" className="text-right" />
+                                <SortableHeader column="totalRealized" label="Realized" className="text-right" />
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedSymbols.map(({ symbol, totalShares, totalCostBasis }) => {
-                                const price = prices[symbol]?.price || 0;
-                                const name = prices[symbol]?.name || symbol;
-                                const marketValue = totalShares * price;
-                                const gainLoss = marketValue - totalCostBasis;
-                                const gainLossPercent = totalCostBasis > 0 ? (gainLoss / totalCostBasis) * 100 : 0;
-                                const avgCost = totalShares > 0 ? totalCostBasis / totalShares : 0;
-
-                                return (
-                                    <tr
-                                        key={symbol}
-                                        onClick={() => navigate(`/holdings/${symbol}`)}
-                                        style={{ cursor: 'pointer' }}
-                                        className="hover-row"
-                                    >
-                                        <td>
-                                            <div style={{ fontWeight: 600 }}>{symbol}</div>
-                                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>{name}</div>
-                                        </td>
-                                        <td className="text-right number">{totalShares.toLocaleString()}</td>
-                                        <td className="text-right number">{formatCurrency(price)}</td>
-                                        <td className="text-right number" style={{ fontWeight: 600 }}>{formatCurrency(marketValue)}</td>
-                                        <td className="text-right number">{formatCurrency(avgCost)}</td>
-                                        <td className={`text-right ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                            <div>{formatCurrency(gainLoss)}</div>
-                                            <div style={{ fontSize: '0.85rem' }}>{formatPercent(gainLossPercent)}</div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {sortedData.map((row) => (
+                                <tr
+                                    key={row.symbol}
+                                    onClick={() => navigate(`/holdings/${row.symbol}`)}
+                                    style={{ cursor: 'pointer' }}
+                                    className="hover-row"
+                                >
+                                    <td>
+                                        <div style={{ fontWeight: 600 }}>{row.symbol}</div>
+                                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>{row.name}</div>
+                                    </td>
+                                    <td className="text-right number">{row.totalShares.toLocaleString()}</td>
+                                    <td className="text-right number">{formatCurrency(row.price)}</td>
+                                    <td className="text-right number" style={{ fontWeight: 600 }}>{formatCurrency(row.marketValue)}</td>
+                                    <td className="text-right number">{formatCurrency(row.avgCost)}</td>
+                                    <td className={`text-right ${row.gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                        <div>{formatCurrency(row.gainLoss)}</div>
+                                        <div style={{ fontSize: '0.85rem' }}>{formatPercent(row.gainLossPercent)}</div>
+                                    </td>
+                                    <td className={`text-right ${row.totalRealized >= 0 ? (row.totalRealized > 0 ? 'text-positive' : '') : 'text-negative'}`}>
+                                        {row.totalRealized !== 0 ? formatCurrency(row.totalRealized) : '-'}
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -194,7 +244,7 @@ function Holdings() {
 
             {splitModalOpen && (
                 <StockSplitModal
-                    symbols={Object.keys(holdingsBySymbol)}
+                    symbols={enrichedHoldings.map(h => h.symbol)}
                     onSave={handleStockSplit}
                     onClose={() => setSplitModalOpen(false)}
                 />
@@ -204,3 +254,4 @@ function Holdings() {
 }
 
 export default Holdings;
+

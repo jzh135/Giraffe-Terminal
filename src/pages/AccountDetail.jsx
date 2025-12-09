@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
     getAccount, getHoldings, getPrices, getTransactions, getCashMovements, getDividends,
@@ -9,6 +9,7 @@ import TradeModal from '../components/modals/TradeModal';
 import CashMovementModal from '../components/modals/CashMovementModal';
 import DividendModal from '../components/modals/DividendModal';
 import ConfirmModal from '../components/modals/ConfirmModal';
+import { useSort } from '../hooks/useSort';
 
 function AccountDetail() {
     const { id } = useParams();
@@ -153,36 +154,88 @@ function AccountDetail() {
         setTradeModalOpen(true);
     }
 
-    // Aggregation Logic
-    const holdingsBySymbol = {};
-    holdings.forEach(h => {
-        if (!holdingsBySymbol[h.symbol]) {
-            holdingsBySymbol[h.symbol] = {
-                symbol: h.symbol,
-                lots: [],
-                totalShares: 0,
-                totalCostBasis: 0
-            };
-        }
-        holdingsBySymbol[h.symbol].lots.push(h);
-        holdingsBySymbol[h.symbol].totalShares += h.shares;
-        holdingsBySymbol[h.symbol].totalCostBasis += h.cost_basis;
-    });
+    // Cash Activity - safe arrays
+    const safeCashMovements = useMemo(() => Array.isArray(cashMovements) ? cashMovements : [], [cashMovements]);
+    const safeDividends = useMemo(() => Array.isArray(dividends) ? dividends : [], [dividends]);
+    const safeTransactions = useMemo(() => Array.isArray(transactions) ? transactions : [], [transactions]);
 
-    const aggregatedHoldings = Object.values(holdingsBySymbol).sort((a, b) => {
-        const aValue = a.totalShares * (prices[a.symbol]?.price || 0);
-        const bValue = b.totalShares * (prices[b.symbol]?.price || 0);
-        return bValue - aValue;
-    });
+    // Calculate dividends by symbol
+    const dividendsBySymbol = useMemo(() => {
+        const result = {};
+        safeDividends.forEach(d => {
+            if (!result[d.symbol]) result[d.symbol] = 0;
+            result[d.symbol] += d.amount;
+        });
+        return result;
+    }, [safeDividends]);
 
-    // Cash Activity
-    const safeCashMovements = Array.isArray(cashMovements) ? cashMovements : [];
-    const safeDividends = Array.isArray(dividends) ? dividends : [];
+    // Calculate realized gains by symbol
+    const realizedGainsBySymbol = useMemo(() => {
+        const result = {};
+        safeTransactions.forEach(t => {
+            if (t.type === 'sell' && t.realized_gain != null) {
+                if (!result[t.symbol]) result[t.symbol] = 0;
+                result[t.symbol] += t.realized_gain;
+            }
+        });
+        return result;
+    }, [safeTransactions]);
 
-    const combinedCashActivity = [
+    // Enriched holdings for sorting
+    const enrichedHoldings = useMemo(() => {
+        const holdingsBySymbol = {};
+        holdings.forEach(h => {
+            if (!holdingsBySymbol[h.symbol]) {
+                holdingsBySymbol[h.symbol] = { symbol: h.symbol, lots: [], totalShares: 0, totalCostBasis: 0 };
+            }
+            holdingsBySymbol[h.symbol].lots.push(h);
+            holdingsBySymbol[h.symbol].totalShares += h.shares;
+            holdingsBySymbol[h.symbol].totalCostBasis += h.cost_basis;
+        });
+
+        return Object.values(holdingsBySymbol).map(h => {
+            const price = prices[h.symbol]?.price || 0;
+            const name = prices[h.symbol]?.name || h.symbol;
+            const marketValue = h.totalShares * price;
+            const gainLoss = marketValue - h.totalCostBasis;
+            const gainLossPercent = h.totalCostBasis > 0 ? (gainLoss / h.totalCostBasis) * 100 : 0;
+            const avgCost = h.totalShares > 0 ? h.totalCostBasis / h.totalShares : 0;
+            const symbolDividends = dividendsBySymbol[h.symbol] || 0;
+            const symbolRealizedGain = realizedGainsBySymbol[h.symbol] || 0;
+            const totalRealized = symbolDividends + symbolRealizedGain;
+
+            return { ...h, name, price, marketValue, gainLoss, gainLossPercent, avgCost, totalRealized };
+        });
+    }, [holdings, prices, dividendsBySymbol, realizedGainsBySymbol]);
+
+    // Enriched lots for sorting
+    const enrichedLots = useMemo(() => {
+        return holdings.map(lot => {
+            const price = prices[lot.symbol]?.price || 0;
+            const marketValue = lot.shares * price;
+            const gainLoss = marketValue - lot.cost_basis;
+            return { ...lot, price, marketValue, gainLoss };
+        });
+    }, [holdings, prices]);
+
+    // Combined cash activity
+    const combinedCashActivity = useMemo(() => [
         ...safeCashMovements.map(m => ({ ...m, category: 'cash', sortDate: m.date })),
-        ...safeDividends.map(d => ({ ...d, category: 'dividend', type: 'dividend', sortDate: d.date }))
-    ].sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
+        ...safeDividends.map(d => ({ ...d, category: 'dividend', type: 'dividend', sortDate: d.date, amount: d.amount }))
+    ], [safeCashMovements, safeDividends]);
+
+    // Trade activity
+    const tradeActivity = useMemo(() => safeTransactions.map(t => ({
+        ...t,
+        total: t.total,
+        sortDate: t.date
+    })), [safeTransactions]);
+
+    // Sort hooks for each table
+    const { sortedData: sortedHoldings, sortConfig: holdingsSortConfig, requestSort: requestHoldingsSort, getSortIndicator: getHoldingsSortIndicator } = useSort(enrichedHoldings, { key: 'marketValue', direction: 'desc' });
+    const { sortedData: sortedLots, sortConfig: lotsSortConfig, requestSort: requestLotsSort, getSortIndicator: getLotsSortIndicator } = useSort(enrichedLots, { key: 'symbol', direction: 'asc' });
+    const { sortedData: sortedTrades, sortConfig: tradesSortConfig, requestSort: requestTradesSort, getSortIndicator: getTradesSortIndicator } = useSort(tradeActivity, { key: 'date', direction: 'desc' });
+    const { sortedData: sortedCash, sortConfig: cashSortConfig, requestSort: requestCashSort, getSortIndicator: getCashSortIndicator } = useSort(combinedCashActivity, { key: 'sortDate', direction: 'desc' });
 
     // Calculate account totals
     const marketValue = holdings.reduce((sum, h) => {
@@ -267,7 +320,7 @@ function AccountDetail() {
 
             {activeTab === 'holdings' && (
                 <div className="card">
-                    {aggregatedHoldings.length === 0 ? (
+                    {sortedHoldings.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">📈</div>
                             <div className="empty-state-title">No holdings yet</div>
@@ -277,45 +330,54 @@ function AccountDetail() {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Symbol</th>
-                                    <th className="text-right">Shares</th>
-                                    <th className="text-right">Price</th>
-                                    <th className="text-right">Market Value</th>
-                                    <th className="text-right">Avg Cost</th>
-                                    <th className="text-right">Total Gain/Loss</th>
+                                    <th className={`sortable ${holdingsSortConfig.key === 'symbol' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('symbol')}>
+                                        Symbol<span className="sort-indicator">{getHoldingsSortIndicator('symbol')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'totalShares' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('totalShares')}>
+                                        Shares<span className="sort-indicator">{getHoldingsSortIndicator('totalShares')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'price' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('price')}>
+                                        Price<span className="sort-indicator">{getHoldingsSortIndicator('price')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'marketValue' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('marketValue')}>
+                                        Market Value<span className="sort-indicator">{getHoldingsSortIndicator('marketValue')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'avgCost' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('avgCost')}>
+                                        Avg Cost<span className="sort-indicator">{getHoldingsSortIndicator('avgCost')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'gainLoss' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('gainLoss')}>
+                                        Unrealized G/L<span className="sort-indicator">{getHoldingsSortIndicator('gainLoss')}</span>
+                                    </th>
+                                    <th className={`text-right sortable ${holdingsSortConfig.key === 'totalRealized' ? 'sorted' : ''}`} onClick={() => requestHoldingsSort('totalRealized')}>
+                                        Realized<span className="sort-indicator">{getHoldingsSortIndicator('totalRealized')}</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {aggregatedHoldings.map(({ symbol, totalShares, totalCostBasis }) => {
-                                    const price = prices[symbol]?.price || 0;
-                                    const marketValue = totalShares * price;
-                                    const gainLoss = marketValue - totalCostBasis;
-                                    const gainLossPercent = totalCostBasis > 0 ? (gainLoss / totalCostBasis) * 100 : 0;
-                                    const avgCost = totalShares > 0 ? totalCostBasis / totalShares : 0;
-                                    const name = prices[symbol]?.name || symbol;
-
-                                    return (
-                                        <tr
-                                            key={symbol}
-                                            onClick={() => navigate(`/holdings/${symbol}`)}
-                                            style={{ cursor: 'pointer' }}
-                                            className="hover-row"
-                                        >
-                                            <td>
-                                                <div style={{ fontWeight: 600 }}>{symbol}</div>
-                                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>{name}</div>
-                                            </td>
-                                            <td className="text-right number">{totalShares.toLocaleString()}</td>
-                                            <td className="text-right number">{formatCurrency(price)}</td>
-                                            <td className="text-right number" style={{ fontWeight: 600 }}>{formatCurrency(marketValue)}</td>
-                                            <td className="text-right number">{formatCurrency(avgCost)}</td>
-                                            <td className={`text-right ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                                <div>{formatCurrency(gainLoss)}</div>
-                                                <div style={{ fontSize: '0.85rem' }}>{formatPercent(gainLossPercent)}</div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                {sortedHoldings.map((row) => (
+                                    <tr
+                                        key={row.symbol}
+                                        onClick={() => navigate(`/holdings/${row.symbol}`)}
+                                        style={{ cursor: 'pointer' }}
+                                        className="hover-row"
+                                    >
+                                        <td>
+                                            <div style={{ fontWeight: 600 }}>{row.symbol}</div>
+                                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>{row.name}</div>
+                                        </td>
+                                        <td className="text-right number">{row.totalShares.toLocaleString()}</td>
+                                        <td className="text-right number">{formatCurrency(row.price)}</td>
+                                        <td className="text-right number" style={{ fontWeight: 600 }}>{formatCurrency(row.marketValue)}</td>
+                                        <td className="text-right number">{formatCurrency(row.avgCost)}</td>
+                                        <td className={`text-right ${row.gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                            <div>{formatCurrency(row.gainLoss)}</div>
+                                            <div style={{ fontSize: '0.85rem' }}>{formatPercent(row.gainLossPercent)}</div>
+                                        </td>
+                                        <td className={`text-right ${row.totalRealized >= 0 ? (row.totalRealized > 0 ? 'text-positive' : '') : 'text-negative'}`}>
+                                            {row.totalRealized !== 0 ? formatCurrency(row.totalRealized) : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     )}
@@ -327,50 +389,54 @@ function AccountDetail() {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>Symbol</th>
-                                <th className="text-right">Shares</th>
-                                <th className="text-right">Purchase Date</th>
-                                <th className="text-right">Cost Basis</th>
-                                <th className="text-right">Gain/Loss</th>
+                                <th className={`sortable ${lotsSortConfig.key === 'symbol' ? 'sorted' : ''}`} onClick={() => requestLotsSort('symbol')}>
+                                    Symbol<span className="sort-indicator">{getLotsSortIndicator('symbol')}</span>
+                                </th>
+                                <th className={`text-right sortable ${lotsSortConfig.key === 'shares' ? 'sorted' : ''}`} onClick={() => requestLotsSort('shares')}>
+                                    Shares<span className="sort-indicator">{getLotsSortIndicator('shares')}</span>
+                                </th>
+                                <th className={`text-right sortable ${lotsSortConfig.key === 'purchase_date' ? 'sorted' : ''}`} onClick={() => requestLotsSort('purchase_date')}>
+                                    Purchase Date<span className="sort-indicator">{getLotsSortIndicator('purchase_date')}</span>
+                                </th>
+                                <th className={`text-right sortable ${lotsSortConfig.key === 'cost_basis' ? 'sorted' : ''}`} onClick={() => requestLotsSort('cost_basis')}>
+                                    Cost Basis<span className="sort-indicator">{getLotsSortIndicator('cost_basis')}</span>
+                                </th>
+                                <th className={`text-right sortable ${lotsSortConfig.key === 'gainLoss' ? 'sorted' : ''}`} onClick={() => requestLotsSort('gainLoss')}>
+                                    Gain/Loss<span className="sort-indicator">{getLotsSortIndicator('gainLoss')}</span>
+                                </th>
                                 <th className="text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {holdings.map(lot => {
-                                const price = prices[lot.symbol]?.price || 0;
-                                const marketValue = lot.shares * price;
-                                const gainLoss = marketValue - lot.cost_basis;
-
-                                return (
-                                    <tr key={lot.id}>
-                                        <td style={{ fontWeight: 500 }}>{lot.symbol}</td>
-                                        <td className="text-right number">{lot.shares}</td>
-                                        <td className="text-right">{formatDate(lot.purchase_date)}</td>
-                                        <td className="text-right number">{formatCurrency(lot.cost_basis)}</td>
-                                        <td className={`text-right number ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                            {formatCurrency(gainLoss)}
-                                        </td>
-                                        <td className="text-right">
-                                            <div className="action-row justify-end">
-                                                <button
-                                                    className="btn btn-icon"
-                                                    onClick={() => openSellModal(lot)}
-                                                    title="Sell"
-                                                >
-                                                    📤
-                                                </button>
-                                                <button
-                                                    className="btn btn-icon"
-                                                    onClick={() => setDeleteConfirm({ type: 'holding', data: lot })}
-                                                    title="Delete"
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {sortedLots.map(lot => (
+                                <tr key={lot.id}>
+                                    <td style={{ fontWeight: 500 }}>{lot.symbol}</td>
+                                    <td className="text-right number">{lot.shares}</td>
+                                    <td className="text-right">{formatDate(lot.purchase_date)}</td>
+                                    <td className="text-right number">{formatCurrency(lot.cost_basis)}</td>
+                                    <td className={`text-right number ${lot.gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                        {formatCurrency(lot.gainLoss)}
+                                    </td>
+                                    <td className="text-right">
+                                        <div className="action-row justify-end">
+                                            <button
+                                                className="btn btn-icon"
+                                                onClick={() => openSellModal(lot)}
+                                                title="Sell"
+                                            >
+                                                📤
+                                            </button>
+                                            <button
+                                                className="btn btn-icon"
+                                                onClick={() => setDeleteConfirm({ type: 'holding', data: lot })}
+                                                title="Delete"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -379,7 +445,7 @@ function AccountDetail() {
             {activeTab === 'trade' && (
                 <div>
                     <div className="card">
-                        {transactions.length === 0 ? (
+                        {sortedTrades.length === 0 ? (
                             <div className="empty-state">
                                 <div className="empty-state-icon">🤝</div>
                                 <div className="empty-state-title">No trades yet</div>
@@ -388,17 +454,29 @@ function AccountDetail() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Type</th>
-                                        <th>Symbol</th>
-                                        <th className="text-right">Shares</th>
-                                        <th className="text-right">Price</th>
-                                        <th className="text-right">Total</th>
+                                        <th className={`sortable ${tradesSortConfig.key === 'date' ? 'sorted' : ''}`} onClick={() => requestTradesSort('date')}>
+                                            Date<span className="sort-indicator">{getTradesSortIndicator('date')}</span>
+                                        </th>
+                                        <th className={`sortable ${tradesSortConfig.key === 'type' ? 'sorted' : ''}`} onClick={() => requestTradesSort('type')}>
+                                            Type<span className="sort-indicator">{getTradesSortIndicator('type')}</span>
+                                        </th>
+                                        <th className={`sortable ${tradesSortConfig.key === 'symbol' ? 'sorted' : ''}`} onClick={() => requestTradesSort('symbol')}>
+                                            Symbol<span className="sort-indicator">{getTradesSortIndicator('symbol')}</span>
+                                        </th>
+                                        <th className={`text-right sortable ${tradesSortConfig.key === 'shares' ? 'sorted' : ''}`} onClick={() => requestTradesSort('shares')}>
+                                            Shares<span className="sort-indicator">{getTradesSortIndicator('shares')}</span>
+                                        </th>
+                                        <th className={`text-right sortable ${tradesSortConfig.key === 'price' ? 'sorted' : ''}`} onClick={() => requestTradesSort('price')}>
+                                            Price<span className="sort-indicator">{getTradesSortIndicator('price')}</span>
+                                        </th>
+                                        <th className={`text-right sortable ${tradesSortConfig.key === 'total' ? 'sorted' : ''}`} onClick={() => requestTradesSort('total')}>
+                                            Total<span className="sort-indicator">{getTradesSortIndicator('total')}</span>
+                                        </th>
                                         <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {transactions.map(tx => (
+                                    {sortedTrades.map(tx => (
                                         <tr key={tx.id}>
                                             <td>{formatDate(tx.date)}</td>
                                             <td>
@@ -428,7 +506,7 @@ function AccountDetail() {
             {activeTab === 'cash' && (
                 <div>
                     <div className="card">
-                        {combinedCashActivity.length === 0 ? (
+                        {sortedCash.length === 0 ? (
                             <div className="empty-state">
                                 <div className="empty-state-icon">💸</div>
                                 <div className="empty-state-title">No cash activity</div>
@@ -437,15 +515,21 @@ function AccountDetail() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Type</th>
+                                        <th className={`sortable ${cashSortConfig.key === 'sortDate' ? 'sorted' : ''}`} onClick={() => requestCashSort('sortDate')}>
+                                            Date<span className="sort-indicator">{getCashSortIndicator('sortDate')}</span>
+                                        </th>
+                                        <th className={`sortable ${cashSortConfig.key === 'type' ? 'sorted' : ''}`} onClick={() => requestCashSort('type')}>
+                                            Type<span className="sort-indicator">{getCashSortIndicator('type')}</span>
+                                        </th>
                                         <th>Description</th>
-                                        <th className="text-right">Amount</th>
+                                        <th className={`text-right sortable ${cashSortConfig.key === 'amount' ? 'sorted' : ''}`} onClick={() => requestCashSort('amount')}>
+                                            Amount<span className="sort-indicator">{getCashSortIndicator('amount')}</span>
+                                        </th>
                                         <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {combinedCashActivity.map((item, idx) => (
+                                    {sortedCash.map((item, idx) => (
                                         <tr key={`${item.category}-${item.id || idx}`}>
                                             <td>{formatDate(item.sortDate)}</td>
                                             <td>

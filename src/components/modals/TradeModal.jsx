@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import NoteModal from './NoteModal';
 
 function TradeModal({
     initialTab = 'buy',
@@ -19,6 +20,7 @@ function TradeModal({
 
     // State to hold the list of transactions (rows)
     const [rows, setRows] = useState([]);
+    const [editingNoteRowId, setEditingNoteRowId] = useState(null);
 
     // Unique symbols for dropdowns
     const uniqueSymbols = [...new Set(holdings.map(h => h.symbol))].sort();
@@ -260,282 +262,304 @@ function TradeModal({
     // --- Render Helpers ---
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1000px', width: '90%' }}>
-                <div className="modal-header">
-                    <h2 className="modal-title">{isEditing ? 'Edit Transaction' : 'Trade / Action'}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                {!isEditing && (
-                    <div className="tabs" style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
-                        {['buy', 'sell', 'dividend'].map(tab => (
-                            <button
-                                key={tab}
-                                className={`tab ${activeTab === tab ? 'active' : ''}`}
-                                onClick={() => handleTabChange(tab)}
-                                style={{ flex: 1, textAlign: 'center' }}
-                            >
-                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit}>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="data-table" style={{ minWidth: activeTab === 'sell' ? '900px' : '800px' }}>
-                            <thead>
-                                <tr>
-                                    {activeTab === 'buy' && (
-                                        <>
-                                            <th>Symbol</th>
-                                            <th style={{ width: '120px' }}>Shares</th>
-                                            <th style={{ width: '140px' }}>Price</th>
-                                            <th style={{ width: '140px' }}>Total</th>
-                                            <th style={{ width: '150px' }}>Date</th>
-                                            <th>Notes</th>
-                                        </>
-                                    )}
-                                    {activeTab === 'sell' && (
-                                        <>
-                                            <th style={{ width: '120px' }}>Symbol</th>
-                                            <th style={{ width: '300px' }}>Tax Lot</th>
-                                            <th style={{ width: '150px' }}>Shares</th>
-                                            <th style={{ width: '140px' }}>Price</th>
-                                            <th style={{ width: '140px' }}>Total</th>
-                                            <th style={{ width: '150px' }}>Date</th>
-                                            <th>Notes</th>
-                                        </>
-                                    )}
-                                    {activeTab === 'dividend' && (
-                                        <>
-                                            <th>Symbol</th>
-                                            <th style={{ width: '140px' }}>Amount</th>
-                                            <th style={{ width: '150px' }}>Date</th>
-                                            <th>Notes</th>
-                                        </>
-                                    )}
-
-                                    <th style={{ width: '50px' }}></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row) => (
-                                    <tr key={row.id}>
-                                        {/* BUY ROW */}
-                                        {activeTab === 'buy' && (
-                                            <>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.symbol}
-                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value.toUpperCase())}
-                                                        placeholder="AAPL"
-                                                        required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="number" className="form-input"
-                                                        value={row.shares}
-                                                        onChange={e => updateRow(row.id, 'shares', e.target.value)}
-                                                        step="any" min="0" required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="number" className="form-input"
-                                                        value={row.price}
-                                                        onChange={e => updateRow(row.id, 'price', e.target.value)}
-                                                        step="0.01" min="0" required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
-                                                        readOnly
-                                                        tabIndex="-1"
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="date" className="form-input"
-                                                        value={row.date}
-                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
-                                                        required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.notes}
-                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
-                                                        placeholder="Optional"
-                                                    />
-                                                </td>
-                                            </>
-                                        )}
-
-                                        {/* SELL ROW */}
-                                        {activeTab === 'sell' && (
-                                            <>
-                                                <td>
-                                                    <select
-                                                        className="form-input"
-                                                        value={row.symbol}
-                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value)}
-                                                        required
-                                                    >
-                                                        <option value="">Select...</option>
-                                                        {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                </td>
-                                                <td>
-                                                    <select
-                                                        className="form-input"
-                                                        value={row.lotId}
-                                                        onChange={e => updateRow(row.id, 'lotId', e.target.value)}
-                                                        required
-                                                        disabled={!row.symbol}
-                                                    >
-                                                        <option value="">Select Lot...</option>
-                                                        {getAvailableLots(row.symbol).map(lot => (
-                                                            <option key={lot.id} value={lot.id}>
-                                                                {new Date(lot.purchase_date).toLocaleDateString()} - {lot.shares}sh (${(lot.cost_basis / lot.shares).toFixed(2)})
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="number" className="form-input"
-                                                        value={row.shares}
-                                                        onChange={e => updateRow(row.id, 'shares', e.target.value)}
-                                                        step="any" min="0" required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="number" className="form-input"
-                                                        value={row.price}
-                                                        onChange={e => updateRow(row.id, 'price', e.target.value)}
-                                                        step="0.01" min="0" required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
-                                                        readOnly
-                                                        tabIndex="-1"
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="date" className="form-input"
-                                                        value={row.date}
-                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
-                                                        required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.notes}
-                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
-                                                        placeholder="Optional"
-                                                    />
-                                                </td>
-                                            </>
-                                        )}
-
-                                        {/* DIVIDEND ROW */}
-                                        {activeTab === 'dividend' && (
-                                            <>
-                                                <td>
-                                                    <select
-                                                        className="form-input"
-                                                        value={row.symbol}
-                                                        onChange={e => updateRow(row.id, 'symbol', e.target.value)}
-                                                        required
-                                                    >
-                                                        <option value="">Select...</option>
-                                                        {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="number" className="form-input"
-                                                        value={row.amount}
-                                                        onChange={e => updateRow(row.id, 'amount', e.target.value)}
-                                                        step="0.01" min="0" required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        type="date" className="form-input"
-                                                        value={row.date}
-                                                        onChange={e => updateRow(row.id, 'date', e.target.value)}
-                                                        required
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        className="form-input"
-                                                        value={row.notes}
-                                                        onChange={e => updateRow(row.id, 'notes', e.target.value)}
-                                                        placeholder="Optional"
-                                                    />
-                                                </td>
-                                            </>
-                                        )}
-
-
-
-                                        <td>
-                                            {!isEditing && rows.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-icon text-negative"
-                                                    onClick={() => removeRow(row.id)}
-                                                    title="Remove Row"
-                                                >
-                                                    &times;
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+        <>
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1000px', width: '90%' }}>
+                    <div className="modal-header">
+                        <h2 className="modal-title">{isEditing ? 'Edit Transaction' : 'Trade / Action'}</h2>
+                        <button className="modal-close" onClick={onClose}>&times;</button>
                     </div>
 
                     {!isEditing && (
-                        <div style={{ marginTop: '10px' }}>
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={addRow}
-                            >
-                                + Add Row
-                            </button>
+                        <div className="tabs" style={{ marginBottom: '20px', borderBottom: '1px solid #ccc' }}>
+                            {['buy', 'sell', 'dividend'].map(tab => (
+                                <button
+                                    key={tab}
+                                    className={`tab ${activeTab === tab ? 'active' : ''}`}
+                                    onClick={() => handleTabChange(tab)}
+                                    style={{ flex: 1, textAlign: 'center' }}
+                                >
+                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                </button>
+                            ))}
                         </div>
                     )}
 
-                    <div className="modal-actions" style={{ marginTop: '20px' }}>
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
-                        </button>
-                    </div>
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="data-table" style={{ minWidth: activeTab === 'sell' ? '900px' : '800px' }}>
+                                <thead>
+                                    <tr>
+                                        {activeTab === 'buy' && (
+                                            <>
+                                                <th>Symbol</th>
+                                                <th style={{ width: '120px' }}>Shares</th>
+                                                <th style={{ width: '140px' }}>Price</th>
+                                                <th style={{ width: '140px' }}>Total</th>
+                                                <th style={{ width: '150px' }}>Date</th>
+                                                <th>Notes</th>
+                                            </>
+                                        )}
+                                        {activeTab === 'sell' && (
+                                            <>
+                                                <th style={{ width: '120px' }}>Symbol</th>
+                                                <th style={{ width: '300px' }}>Tax Lot</th>
+                                                <th style={{ width: '150px' }}>Shares</th>
+                                                <th style={{ width: '140px' }}>Price</th>
+                                                <th style={{ width: '140px' }}>Total</th>
+                                                <th style={{ width: '150px' }}>Date</th>
+                                                <th>Notes</th>
+                                            </>
+                                        )}
+                                        {activeTab === 'dividend' && (
+                                            <>
+                                                <th>Symbol</th>
+                                                <th style={{ width: '140px' }}>Amount</th>
+                                                <th style={{ width: '150px' }}>Date</th>
+                                                <th>Notes</th>
+                                            </>
+                                        )}
 
-                </form>
+                                        <th style={{ width: '50px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row) => (
+                                        <tr key={row.id}>
+                                            {/* BUY ROW */}
+                                            {activeTab === 'buy' && (
+                                                <>
+                                                    <td>
+                                                        <input
+                                                            className="form-input"
+                                                            value={row.symbol}
+                                                            onChange={e => updateRow(row.id, 'symbol', e.target.value.toUpperCase())}
+                                                            placeholder="AAPL"
+                                                            required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.shares}
+                                                            onChange={e => updateRow(row.id, 'shares', e.target.value)}
+                                                            step="any" min="0" required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.price}
+                                                            onChange={e => updateRow(row.id, 'price', e.target.value)}
+                                                            step="0.01" min="0" required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            className="form-input"
+                                                            value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
+                                                            readOnly
+                                                            tabIndex="-1"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="date" className="form-input"
+                                                            value={row.date}
+                                                            onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                            required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            type="button"
+                                                            className={`btn btn-sm ${row.notes ? 'btn-primary' : 'btn-secondary'}`}
+                                                            onClick={() => setEditingNoteRowId(row.id)}
+                                                            title={row.notes || "Add Note"}
+                                                            style={{ width: '100%' }}
+                                                        >
+                                                            {row.notes ? '📝 Edit Note' : '➕ Add Note'}
+                                                        </button>
+                                                    </td>
+                                                </>
+                                            )}
+
+                                            {/* SELL ROW */}
+                                            {activeTab === 'sell' && (
+                                                <>
+                                                    <td>
+                                                        <select
+                                                            className="form-input"
+                                                            value={row.symbol}
+                                                            onChange={e => updateRow(row.id, 'symbol', e.target.value)}
+                                                            required
+                                                        >
+                                                            <option value="">Select...</option>
+                                                            {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <select
+                                                            className="form-input"
+                                                            value={row.lotId}
+                                                            onChange={e => updateRow(row.id, 'lotId', e.target.value)}
+                                                            required
+                                                            disabled={!row.symbol}
+                                                        >
+                                                            <option value="">Select Lot...</option>
+                                                            {getAvailableLots(row.symbol).map(lot => (
+                                                                <option key={lot.id} value={lot.id}>
+                                                                    {new Date(lot.purchase_date).toLocaleDateString()} - {lot.shares}sh (${(lot.cost_basis / lot.shares).toFixed(2)})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.shares}
+                                                            onChange={e => updateRow(row.id, 'shares', e.target.value)}
+                                                            step="any" min="0" required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.price}
+                                                            onChange={e => updateRow(row.id, 'price', e.target.value)}
+                                                            step="0.01" min="0" required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            className="form-input"
+                                                            value={row.shares && row.price ? (parseFloat(row.shares) * parseFloat(row.price)).toFixed(2) : '-'}
+                                                            readOnly
+                                                            tabIndex="-1"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="date" className="form-input"
+                                                            value={row.date}
+                                                            onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                            required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            type="button"
+                                                            className={`btn btn-sm ${row.notes ? 'btn-primary' : 'btn-secondary'}`}
+                                                            onClick={() => setEditingNoteRowId(row.id)}
+                                                            title={row.notes || "Add Note"}
+                                                            style={{ width: '100%' }}
+                                                        >
+                                                            {row.notes ? '📝 Edit Note' : '➕ Add Note'}
+                                                        </button>
+                                                    </td>
+                                                </>
+                                            )}
+
+                                            {/* DIVIDEND ROW */}
+                                            {activeTab === 'dividend' && (
+                                                <>
+                                                    <td>
+                                                        <select
+                                                            className="form-input"
+                                                            value={row.symbol}
+                                                            onChange={e => updateRow(row.id, 'symbol', e.target.value)}
+                                                            required
+                                                        >
+                                                            <option value="">Select...</option>
+                                                            {uniqueSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="number" className="form-input"
+                                                            value={row.amount}
+                                                            onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                                                            step="0.01" min="0" required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="date" className="form-input"
+                                                            value={row.date}
+                                                            onChange={e => updateRow(row.id, 'date', e.target.value)}
+                                                            required
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            type="button"
+                                                            className={`btn btn-sm ${row.notes ? 'btn-primary' : 'btn-secondary'}`}
+                                                            onClick={() => setEditingNoteRowId(row.id)}
+                                                            title={row.notes || "Add Note"}
+                                                            style={{ width: '100%' }}
+                                                        >
+                                                            {row.notes ? '📝 Edit Note' : '➕ Add Note'}
+                                                        </button>
+                                                    </td>
+                                                </>
+                                            )}
+
+
+
+                                            <td>
+                                                {!isEditing && rows.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-icon text-negative"
+                                                        onClick={() => removeRow(row.id)}
+                                                        title="Remove Row"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {!isEditing && (
+                            <div style={{ marginTop: '10px' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={addRow}
+                                >
+                                    + Add Row
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="modal-actions" style={{ marginTop: '20px' }}>
+                            <button type="button" className="btn btn-secondary" onClick={onClose}>
+                                Cancel
+                            </button>
+                            <button type="submit" className="btn btn-primary">
+                                {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
             </div>
-        </div>
+
+            {editingNoteRowId && (
+                <NoteModal
+                    initialNote={rows.find(r => r.id === editingNoteRowId)?.notes || ''}
+                    onSave={(note) => {
+                        updateRow(editingNoteRowId, 'notes', note);
+                        setEditingNoteRowId(null);
+                    }}
+                    onClose={() => setEditingNoteRowId(null)}
+                />
+            )}
+        </>
     );
 }
 
