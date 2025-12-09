@@ -181,6 +181,21 @@ function AccountDetail() {
         return result;
     }, [safeTransactions]);
 
+    // Build realized gain data for the Realized Gain tab
+    const realizedGainData = useMemo(() => {
+        const symbols = new Set([
+            ...Object.keys(dividendsBySymbol),
+            ...Object.keys(realizedGainsBySymbol)
+        ]);
+
+        return Array.from(symbols).map(symbol => ({
+            symbol,
+            tradeGain: realizedGainsBySymbol[symbol] || 0,
+            dividendGain: dividendsBySymbol[symbol] || 0,
+            totalGain: (realizedGainsBySymbol[symbol] || 0) + (dividendsBySymbol[symbol] || 0)
+        })).sort((a, b) => b.totalGain - a.totalGain);
+    }, [dividendsBySymbol, realizedGainsBySymbol]);
+
     // Enriched holdings for sorting
     const enrichedHoldings = useMemo(() => {
         const holdingsBySymbol = {};
@@ -307,13 +322,13 @@ function AccountDetail() {
             </div>
 
             <div className="tabs">
-                {['holdings', 'lots', 'trade', 'cash'].map(tab => (
+                {['holdings', 'lots', 'trade', 'cash', 'realized'].map(tab => (
                     <button
                         key={tab}
                         className={`tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={() => setActiveTab(tab)}
                     >
-                        {tab === 'cash' ? 'Cash Movement' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === 'cash' ? 'Cash Movement' : tab === 'realized' ? 'Realized Gain' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
                 ))}
             </div>
@@ -571,6 +586,61 @@ function AccountDetail() {
                                         </tr>
                                     ))}
                                 </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'realized' && (
+                <div>
+                    <div className="card">
+                        {realizedGainData.length === 0 ? (
+                            <div className="empty-state">
+                                <div className="empty-state-icon">💰</div>
+                                <div className="empty-state-title">No realized gains yet</div>
+                                <p>Sell stocks or receive dividends to see realized gains</p>
+                            </div>
+                        ) : (
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th className="text-right">Trade Gain/Loss</th>
+                                        <th className="text-right">Dividends</th>
+                                        <th className="text-right">Total Realized</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {realizedGainData.map(row => (
+                                        <tr key={row.symbol}>
+                                            <td style={{ fontWeight: 600 }}>{row.symbol}</td>
+                                            <td className={`text-right number ${row.tradeGain >= 0 ? (row.tradeGain > 0 ? 'text-positive' : '') : 'text-negative'}`}>
+                                                {row.tradeGain !== 0 ? formatCurrency(row.tradeGain) : '-'}
+                                            </td>
+                                            <td className={`text-right number ${row.dividendGain > 0 ? 'text-positive' : ''}`}>
+                                                {row.dividendGain > 0 ? formatCurrency(row.dividendGain) : '-'}
+                                            </td>
+                                            <td className={`text-right number ${row.totalGain >= 0 ? (row.totalGain > 0 ? 'text-positive' : '') : 'text-negative'}`} style={{ fontWeight: 600 }}>
+                                                {formatCurrency(row.totalGain)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr style={{ fontWeight: 600, borderTop: '2px solid var(--border-color)' }}>
+                                        <td>Total</td>
+                                        <td className={`text-right number ${realizedGainData.reduce((sum, r) => sum + r.tradeGain, 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                            {formatCurrency(realizedGainData.reduce((sum, r) => sum + r.tradeGain, 0))}
+                                        </td>
+                                        <td className="text-right number text-positive">
+                                            {formatCurrency(realizedGainData.reduce((sum, r) => sum + r.dividendGain, 0))}
+                                        </td>
+                                        <td className={`text-right number ${realizedGainData.reduce((sum, r) => sum + r.totalGain, 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                            {formatCurrency(realizedGainData.reduce((sum, r) => sum + r.totalGain, 0))}
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         )}
                     </div>

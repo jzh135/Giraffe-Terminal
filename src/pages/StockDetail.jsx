@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import TradeModal from '../components/modals/TradeModal';
 import StockSplitModal from '../components/modals/StockSplitModal';
+import ConfirmModal from '../components/modals/ConfirmModal';
 
 function StockDetail() {
     const { symbol } = useParams();
@@ -10,6 +11,7 @@ function StockDetail() {
     const [holdings, setHoldings] = useState([]); // Filtered for this stock
     const [allHoldings, setAllHoldings] = useState([]); // All holdings for modal
     const [transactions, setTransactions] = useState([]);
+    const [dividends, setDividends] = useState([]);
     const [price, setPrice] = useState(null);
     const [allPrices, setAllPrices] = useState({}); // For modal
     const [loading, setLoading] = useState(true);
@@ -19,15 +21,20 @@ function StockDetail() {
     const [tradeTab, setTradeTab] = useState('buy');
     const [stockSplitModalOpen, setStockSplitModalOpen] = useState(false);
 
+    // Edit/Delete state
+    const [editTransaction, setEditTransaction] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+
     useEffect(() => {
         loadData();
     }, [symbol]);
 
     async function loadData() {
         try {
-            const [holdingsData, transactionsData, priceData, allPricesData] = await Promise.all([
+            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData] = await Promise.all([
                 api.getHoldings(),
                 api.getTransactions({ symbol }),
+                api.getDividends({ symbol }),
                 api.fetchPrice(symbol),
                 api.getPrices()
             ]);
@@ -37,6 +44,7 @@ function StockDetail() {
             setHoldings(symbolHoldings);
             setAllHoldings(holdingsData);
             setTransactions(transactionsData);
+            setDividends(dividendsData);
             setPrice(priceData);
             setAllPrices(allPricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
         } catch (err) {
@@ -91,6 +99,52 @@ function StockDetail() {
         }
     }
 
+    // Edit transaction handler
+    async function handleUpdateTransaction(id, data) {
+        try {
+            if (editTransaction.activityType === 'dividend') {
+                await api.updateDividend(id, data);
+            } else {
+                await api.updateTransaction(id, data);
+            }
+            setEditTransaction(null);
+            await loadData();
+        } catch (err) {
+            alert('Failed to update: ' + err.message);
+        }
+    }
+
+    // Delete handler
+    async function handleDelete() {
+        if (!deleteConfirm) return;
+        try {
+            if (deleteConfirm.activityType === 'dividend') {
+                await api.deleteDividend(deleteConfirm.id);
+            } else {
+                await api.deleteTransaction(deleteConfirm.id);
+            }
+            setDeleteConfirm(null);
+            await loadData();
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
+        }
+    }
+
+    // Combine transactions and dividends for activity history
+    const allActivity = [
+        ...transactions.map(t => ({
+            ...t,
+            activityType: 'transaction'
+        })),
+        ...dividends.map(d => ({
+            ...d,
+            activityType: 'dividend',
+            shares: '-',
+            price: '-',
+            total: d.amount
+        }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
     const totalShares = holdings.reduce((sum, h) => sum + h.shares, 0);
     const totalCostBasis = holdings.reduce((sum, h) => sum + h.cost_basis, 0);
     const currentPrice = price?.price || 0;
@@ -100,6 +154,7 @@ function StockDetail() {
     const avgCost = totalShares > 0 ? totalCostBasis / totalShares : 0;
 
     const formatCurrency = (value) => {
+        if (typeof value !== 'number') return value;
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
@@ -220,7 +275,7 @@ function StockDetail() {
                 <div>
                     <h3 className="section-title">Activity History</h3>
                     <div className="card">
-                        {transactions.length === 0 ? (
+                        {allActivity.length === 0 ? (
                             <p className="text-muted">No activity found.</p>
                         ) : (
                             <table className="data-table">
@@ -231,20 +286,44 @@ function StockDetail() {
                                         <th className="text-right">Shares</th>
                                         <th className="text-right">Price</th>
                                         <th className="text-right">Total</th>
+                                        <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {transactions.map(tx => (
-                                        <tr key={tx.id}>
-                                            <td>{formatDate(tx.date)}</td>
+                                    {allActivity.map(activity => (
+                                        <tr key={`${activity.activityType}-${activity.id}`}>
+                                            <td>{formatDate(activity.date)}</td>
                                             <td>
-                                                <span className={`badge badge-${tx.type === 'buy' ? 'success' : tx.type === 'sell' ? 'danger' : 'neutral'}`}>
-                                                    {tx.type.toUpperCase()}
+                                                <span className={`badge badge-${activity.type === 'buy' ? 'success' :
+                                                        activity.type === 'sell' ? 'danger' :
+                                                            activity.activityType === 'dividend' ? 'warning' : 'neutral'
+                                                    }`}>
+                                                    {activity.activityType === 'dividend' ? 'DIVIDEND' : activity.type.toUpperCase()}
                                                 </span>
                                             </td>
-                                            <td className="text-right number">{tx.shares.toLocaleString()}</td>
-                                            <td className="text-right number">{formatCurrency(tx.price)}</td>
-                                            <td className="text-right number">{formatCurrency(tx.total)}</td>
+                                            <td className="text-right number">
+                                                {typeof activity.shares === 'number' ? activity.shares.toLocaleString() : activity.shares}
+                                            </td>
+                                            <td className="text-right number">{formatCurrency(activity.price)}</td>
+                                            <td className="text-right number">{formatCurrency(activity.total)}</td>
+                                            <td className="text-right">
+                                                <div className="action-row justify-end">
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => setEditTransaction(activity)}
+                                                        title="Edit"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon text-negative"
+                                                        onClick={() => setDeleteConfirm(activity)}
+                                                        title="Delete"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -267,6 +346,16 @@ function StockDetail() {
                 />
             )}
 
+            {editTransaction && (
+                <TradeModal
+                    editingTransaction={editTransaction}
+                    holdings={allHoldings}
+                    prices={allPrices}
+                    onUpdate={handleUpdateTransaction}
+                    onClose={() => setEditTransaction(null)}
+                />
+            )}
+
             {stockSplitModalOpen && (
                 <StockSplitModal
                     symbols={[symbol]}
@@ -274,8 +363,19 @@ function StockDetail() {
                     onClose={() => setStockSplitModalOpen(false)}
                 />
             )}
+
+            {deleteConfirm && (
+                <ConfirmModal
+                    title="Delete Activity"
+                    message={`Are you sure you want to delete this ${deleteConfirm.activityType === 'dividend' ? 'dividend' : 'transaction'}?`}
+                    confirmText="Delete"
+                    onConfirm={handleDelete}
+                    onCancel={() => setDeleteConfirm(null)}
+                />
+            )}
         </div>
     );
 }
 
 export default StockDetail;
+
