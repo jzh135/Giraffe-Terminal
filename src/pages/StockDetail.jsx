@@ -12,6 +12,7 @@ function StockDetail() {
     const [allHoldings, setAllHoldings] = useState([]); // All holdings for modal
     const [transactions, setTransactions] = useState([]);
     const [dividends, setDividends] = useState([]);
+    const [accounts, setAccounts] = useState([]);
     const [price, setPrice] = useState(null);
     const [allPrices, setAllPrices] = useState({}); // For modal
     const [loading, setLoading] = useState(true);
@@ -25,18 +26,32 @@ function StockDetail() {
     const [editTransaction, setEditTransaction] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+    // Research editing state
+    const [editingResearch, setEditingResearch] = useState(false);
+    const [researchForm, setResearchForm] = useState({
+        theme: '',
+        strategy: '',
+        market_cap: '',
+        valuation_rating: null,
+        growth_quality_rating: null,
+        econ_moat_rating: null,
+        leadership_rating: null,
+        financial_health_rating: null
+    });
+
     useEffect(() => {
         loadData();
     }, [symbol]);
 
     async function loadData() {
         try {
-            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData] = await Promise.all([
+            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData, accountsData] = await Promise.all([
                 api.getHoldings(),
                 api.getTransactions({ symbol }),
                 api.getDividends({ symbol }),
                 api.fetchPrice(symbol),
-                api.getPrices()
+                api.getPrices(),
+                api.getAccounts()
             ]);
 
             // Filter holdings for this symbol
@@ -45,6 +60,7 @@ function StockDetail() {
             setAllHoldings(holdingsData);
             setTransactions(transactionsData);
             setDividends(dividendsData);
+            setAccounts(accountsData);
             setPrice(priceData);
             setAllPrices(allPricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
         } catch (err) {
@@ -129,6 +145,64 @@ function StockDetail() {
             alert('Failed to delete: ' + err.message);
         }
     }
+
+    // Research editing handlers
+    function openResearchEdit() {
+        setResearchForm({
+            theme: price?.theme || '',
+            strategy: price?.strategy || '',
+            market_cap: price?.market_cap || '',
+            valuation_rating: price?.valuation_rating ?? null,
+            growth_quality_rating: price?.growth_quality_rating ?? null,
+            econ_moat_rating: price?.econ_moat_rating ?? null,
+            leadership_rating: price?.leadership_rating ?? null,
+            financial_health_rating: price?.financial_health_rating ?? null
+        });
+        setEditingResearch(true);
+    }
+
+    async function handleSaveResearch() {
+        try {
+            await api.updateStockResearch(symbol, researchForm);
+            setEditingResearch(false);
+            await loadData();
+        } catch (err) {
+            alert('Failed to save research: ' + err.message);
+        }
+    }
+
+    // StarRating component - inline for simplicity
+    const StarRating = ({ value, onChange, readOnly = false }) => {
+        const stars = [];
+        for (let i = 1; i <= 5; i++) {
+            const filled = value >= i;
+            const halfFilled = value >= i - 0.5 && value < i;
+            stars.push(
+                <span
+                    key={i}
+                    onClick={() => !readOnly && onChange && onChange(value === i ? i - 0.5 : (value === i - 0.5 ? null : i))}
+                    style={{
+                        cursor: readOnly ? 'default' : 'pointer',
+                        fontSize: '1.2rem',
+                        color: filled || halfFilled ? '#f59e0b' : '#d1d5db'
+                    }}
+                    title={readOnly ? `${value || 0} stars` : `Click for ${i} stars`}
+                >
+                    {filled ? '★' : (halfFilled ? '⯨' : '☆')}
+                </span>
+            );
+        }
+        return <span style={{ display: 'inline-flex', gap: '2px' }}>{stars}</span>;
+    };
+
+    // Format market cap
+    const formatMarketCap = (value) => {
+        if (!value) return '-';
+        if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+        if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+        if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+        return `$${value.toLocaleString()}`;
+    };
 
     // Combine transactions and dividends for activity history
     const allActivity = [
@@ -228,6 +302,117 @@ function StockDetail() {
                 </div>
             </div>
 
+            {/* Research Section */}
+            <div className="card mb-lg">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Research</h3>
+                    {!editingResearch ? (
+                        <button className="btn btn-secondary btn-sm" onClick={openResearchEdit}>
+                            ✏️ Edit
+                        </button>
+                    ) : (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn btn-primary btn-sm" onClick={handleSaveResearch}>Save</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setEditingResearch(false)}>Cancel</button>
+                        </div>
+                    )}
+                </div>
+
+                {editingResearch ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+                        <div>
+                            <label className="form-label">Theme</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={researchForm.theme}
+                                onChange={e => setResearchForm({ ...researchForm, theme: e.target.value })}
+                                placeholder="e.g., Tech, Healthcare, Value"
+                            />
+                        </div>
+                        <div>
+                            <label className="form-label">Strategy</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={researchForm.strategy}
+                                onChange={e => setResearchForm({ ...researchForm, strategy: e.target.value })}
+                                placeholder="e.g., Long-term hold, Dividend"
+                            />
+                        </div>
+                        <div>
+                            <label className="form-label">Market Cap</label>
+                            <select
+                                className="form-input"
+                                value={researchForm.market_cap}
+                                onChange={e => setResearchForm({ ...researchForm, market_cap: e.target.value })}
+                            >
+                                <option value="">— Select —</option>
+                                <option value="MEGA">MEGA</option>
+                                <option value="LARGE">LARGE</option>
+                                <option value="MID/SMALL">MID/SMALL</option>
+                                <option value="ETF">ETF</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="form-label">Valuation</label>
+                            <div><StarRating value={researchForm.valuation_rating} onChange={v => setResearchForm({ ...researchForm, valuation_rating: v })} /></div>
+                        </div>
+                        <div>
+                            <label className="form-label">Growth Quality</label>
+                            <div><StarRating value={researchForm.growth_quality_rating} onChange={v => setResearchForm({ ...researchForm, growth_quality_rating: v })} /></div>
+                        </div>
+                        <div>
+                            <label className="form-label">Economic Moat</label>
+                            <div><StarRating value={researchForm.econ_moat_rating} onChange={v => setResearchForm({ ...researchForm, econ_moat_rating: v })} /></div>
+                        </div>
+                        <div>
+                            <label className="form-label">Leadership</label>
+                            <div><StarRating value={researchForm.leadership_rating} onChange={v => setResearchForm({ ...researchForm, leadership_rating: v })} /></div>
+                        </div>
+                        <div>
+                            <label className="form-label">Financial Health</label>
+                            <div><StarRating value={researchForm.financial_health_rating} onChange={v => setResearchForm({ ...researchForm, financial_health_rating: v })} /></div>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Theme</div>
+                            <div>{price?.theme || <span className="text-muted">-</span>}</div>
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Strategy</div>
+                            <div>{price?.strategy || <span className="text-muted">-</span>}</div>
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Market Cap</div>
+                            <div>{price?.market_cap || <span className="text-muted">-</span>}</div>
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Valuation</div>
+                            <StarRating value={price?.valuation_rating} readOnly />
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Growth Quality</div>
+                            <StarRating value={price?.growth_quality_rating} readOnly />
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Economic Moat</div>
+                            <StarRating value={price?.econ_moat_rating} readOnly />
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Leadership</div>
+                            <StarRating value={price?.leadership_rating} readOnly />
+                        </div>
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Financial Health</div>
+                            <StarRating value={price?.financial_health_rating} readOnly />
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div className="grid grid-2">
                 {/* Lots Section */}
                 <div>
@@ -295,8 +480,8 @@ function StockDetail() {
                                             <td>{formatDate(activity.date)}</td>
                                             <td>
                                                 <span className={`badge badge-${activity.type === 'buy' ? 'success' :
-                                                        activity.type === 'sell' ? 'danger' :
-                                                            activity.activityType === 'dividend' ? 'warning' : 'neutral'
+                                                    activity.type === 'sell' ? 'danger' :
+                                                        activity.activityType === 'dividend' ? 'warning' : 'neutral'
                                                     }`}>
                                                     {activity.activityType === 'dividend' ? 'DIVIDEND' : activity.type.toUpperCase()}
                                                 </span>
@@ -338,6 +523,7 @@ function StockDetail() {
                     initialTab={tradeTab}
                     initialSymbol={symbol}
                     holdings={allHoldings}
+                    accounts={accounts}
                     prices={allPrices}
                     onBuy={handleBuy}
                     onSell={handleSell}
@@ -378,4 +564,3 @@ function StockDetail() {
 }
 
 export default StockDetail;
-

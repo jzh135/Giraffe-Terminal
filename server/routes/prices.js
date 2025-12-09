@@ -42,10 +42,10 @@ router.post('/refresh', async (req, res) => {
                 if (price) {
                     // Upsert the price
                     db.prepare(`
-            INSERT INTO stock_prices (symbol, price, name, updated_at) 
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
-          `).run(symbol, price.price, price.name, now, price.price, price.name, now);
+                        INSERT INTO stock_prices (symbol, price, name, updated_at) 
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
+                    `).run(symbol, price.price, price.name, now, price.price, price.name, now);
 
                     updatedPrices.push({ symbol, ...price, updated_at: now });
                 }
@@ -74,12 +74,55 @@ router.get('/fetch/:symbol', async (req, res) => {
 
         // Cache the price
         db.prepare(`
-      INSERT INTO stock_prices (symbol, price, name, updated_at) 
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
-    `).run(symbol, price.price, price.name, now, price.price, price.name, now);
+            INSERT INTO stock_prices (symbol, price, name, updated_at) 
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
+        `).run(symbol, price.price, price.name, now, price.price, price.name, now);
 
         res.json({ symbol, ...price, updated_at: now });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Update research fields for a symbol
+router.put('/:symbol', (req, res) => {
+    try {
+        const symbol = req.params.symbol.toUpperCase();
+        const { theme, strategy, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, market_cap } = req.body;
+
+        const now = new Date().toISOString();
+
+        // Check if symbol exists
+        const existing = db.prepare('SELECT symbol FROM stock_prices WHERE symbol = ?').get(symbol);
+
+        if (existing) {
+            // Update research fields
+            db.prepare(`
+                UPDATE stock_prices SET 
+                    theme = ?, 
+                    strategy = ?, 
+                    valuation_rating = ?, 
+                    growth_quality_rating = ?, 
+                    econ_moat_rating = ?, 
+                    leadership_rating = ?, 
+                    financial_health_rating = ?,
+                    market_cap = COALESCE(?, market_cap),
+                    research_updated_at = ?
+                WHERE symbol = ?
+            `).run(theme || null, strategy || null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, market_cap ?? null, now, symbol);
+        } else {
+            // Insert new row with research fields
+            db.prepare(`
+                INSERT INTO stock_prices (symbol, price, name, theme, strategy, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, market_cap, research_updated_at, updated_at)
+                VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(symbol, symbol, theme || null, strategy || null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, market_cap ?? null, now, now);
+        }
+
+        const updated = db.prepare('SELECT * FROM stock_prices WHERE symbol = ?').get(symbol);
+        res.json(updated);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

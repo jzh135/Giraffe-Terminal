@@ -653,6 +653,7 @@ function AccountDetail() {
                 <TradeModal
                     initialTab={tradeTab}
                     initialHolding={selectedHolding}
+                    initialAccountId={id}
                     holdings={holdings}
                     prices={prices}
                     onBuy={handleAddHolding}

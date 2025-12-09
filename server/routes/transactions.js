@@ -83,15 +83,40 @@ router.put('/:id', (req, res) => {
     try {
         const { type, symbol, shares, price, date, notes } = req.body;
         const total = shares * price;
+        const txId = req.params.id;
 
-        db.prepare(
-            'UPDATE transactions SET type = ?, symbol = ?, shares = ?, price = ?, total = ?, date = ?, notes = ? WHERE id = ?'
-        ).run(type, symbol, shares, price, total, date, notes, req.params.id);
-
-        const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
-        if (!transaction) {
+        // Get the existing transaction to check if it's a buy and has an associated holding
+        const existingTx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txId);
+        if (!existingTx) {
             return res.status(404).json({ error: 'Transaction not found' });
         }
+
+        // Use a database transaction for atomicity
+        const updateTx = db.transaction(() => {
+            // Update the transaction record
+            db.prepare(
+                'UPDATE transactions SET type = ?, symbol = ?, shares = ?, price = ?, total = ?, date = ?, notes = ? WHERE id = ?'
+            ).run(type, symbol.toUpperCase(), shares, price, total, date, notes, txId);
+
+            // If this is a buy transaction with an associated holding, update the holding too
+            if (existingTx.type === 'buy' && existingTx.holding_id) {
+                const holding = db.prepare('SELECT * FROM holdings WHERE id = ?').get(existingTx.holding_id);
+
+                if (holding) {
+                    // Calculate the new cost basis (shares * price)
+                    const newCostBasis = shares * price;
+
+                    // Update the holding with new shares, cost_basis, symbol, and purchase_date
+                    db.prepare(
+                        'UPDATE holdings SET symbol = ?, shares = ?, cost_basis = ?, purchase_date = ? WHERE id = ?'
+                    ).run(symbol.toUpperCase(), shares, newCostBasis, date, existingTx.holding_id);
+                }
+            }
+        });
+
+        updateTx();
+
+        const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txId);
         res.json(transaction);
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -69,11 +69,20 @@ CREATE TABLE IF NOT EXISTS stock_splits (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Cached stock prices
+-- Cached stock prices with research fields
 CREATE TABLE IF NOT EXISTS stock_prices (
   symbol TEXT PRIMARY KEY,
   price REAL NOT NULL,
   name TEXT,
+  market_cap REAL,
+  theme TEXT,
+  strategy TEXT,
+  valuation_rating REAL,
+  growth_quality_rating REAL,
+  econ_moat_rating REAL,
+  leadership_rating REAL,
+  financial_health_rating REAL,
+  research_updated_at TEXT,
   updated_at TEXT NOT NULL
 );
 

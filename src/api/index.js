@@ -84,13 +84,13 @@ export const getStockSplits = (symbol) => {
 export const createStockSplit = (data) => request('/stock-splits', { method: 'POST', body: data });
 export const deleteStockSplit = (id) => request(`/stock-splits/${id}`, { method: 'DELETE' });
 
-// Prices
 export const getPrices = (symbols) => {
     const params = symbols ? `?symbols=${symbols.join(',')}` : '';
     return request(`/prices${params}`);
 };
 export const refreshPrices = () => request('/prices/refresh', { method: 'POST' });
 export const fetchPrice = (symbol) => request(`/prices/fetch/${symbol}`);
+export const updateStockResearch = (symbol, data) => request(`/prices/${symbol}`, { method: 'PUT', body: data });
 
 // Performance
 export const getPerformance = (accountId) => {

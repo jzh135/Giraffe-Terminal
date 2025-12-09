@@ -56,4 +56,27 @@ try {
     console.error('app_settings migration failed:', err);
 }
 
+// Migration: Add research fields to stock_prices if missing
+try {
+    const tableInfo = db.prepare('PRAGMA table_info(stock_prices)').all();
+    const hasMarketCap = tableInfo.some(col => col.name === 'market_cap');
+    if (!hasMarketCap) {
+        console.log('Migrating: Adding research fields to stock_prices table...');
+        db.exec(`
+            ALTER TABLE stock_prices ADD COLUMN market_cap REAL;
+            ALTER TABLE stock_prices ADD COLUMN theme TEXT;
+            ALTER TABLE stock_prices ADD COLUMN strategy TEXT;
+            ALTER TABLE stock_prices ADD COLUMN valuation_rating REAL;
+            ALTER TABLE stock_prices ADD COLUMN growth_quality_rating REAL;
+            ALTER TABLE stock_prices ADD COLUMN econ_moat_rating REAL;
+            ALTER TABLE stock_prices ADD COLUMN leadership_rating REAL;
+            ALTER TABLE stock_prices ADD COLUMN financial_health_rating REAL;
+            ALTER TABLE stock_prices ADD COLUMN research_updated_at TEXT;
+        `);
+        console.log('Research fields added to stock_prices successfully');
+    }
+} catch (err) {
+    console.error('stock_prices research migration failed:', err);
+}
+
 export default db;
