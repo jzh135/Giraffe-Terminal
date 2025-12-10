@@ -101,7 +101,7 @@ function SellModal({ holding, holdings = [], prices = {}, onSave, onClose }) {
                                     <option value="">-- Choose Lot --</option>
                                     {availableLots.map(lot => (
                                         <option key={lot.id} value={lot.id}>
-                                            {new Date(lot.purchase_date).toLocaleDateString()} - {lot.shares} shares @ ${lot.cost_basis / lot.shares}
+                                            {new Date(lot.purchase_date + 'T00:00:00').toLocaleDateString()} - {lot.shares} shares @ ${lot.cost_basis / lot.shares}
                                         </option>
                                     ))}
                                 </select>
@@ -122,7 +122,7 @@ function SellModal({ holding, holdings = [], prices = {}, onSave, onClose }) {
                         <div className="card" style={{ marginBottom: 'var(--spacing-lg)', padding: 'var(--spacing-md)' }}>
                             <div className="flex justify-between">
                                 <span className="text-muted">Lot Date:</span>
-                                <span>{new Date(activeHolding.purchase_date).toLocaleDateString()}</span>
+                                <span>{new Date(activeHolding.purchase_date + 'T00:00:00').toLocaleDateString()}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-muted">Available:</span>

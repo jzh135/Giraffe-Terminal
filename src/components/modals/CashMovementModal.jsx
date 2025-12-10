@@ -17,6 +17,10 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
             : [{ id: Date.now(), type: 'deposit', amount: '', date: today, notes: '' }]
     );
 
+    // Confirmation state
+    const [showConfirmation, setShowConfirmation] = useState(false);
+    const [pendingRows, setPendingRows] = useState([]);
+
     const createRow = () => ({
         id: Date.now() + Math.random(),
         type: 'deposit',
@@ -42,15 +46,34 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
         }));
     };
 
-    async function handleSubmit(e) {
-        e.preventDefault();
+    // Format currency for display
+    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
-        // Filter valid rows
+    // Format date for display
+    const formatDate = (dateStr) => {
+        const date = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    // Handle review (show confirmation)
+    function handleReview(e) {
+        e.preventDefault();
         const validRows = rows.filter(r => r.amount && r.date);
         if (validRows.length === 0) return;
+        setPendingRows(validRows);
+        setShowConfirmation(true);
+    }
 
+    // Go back to edit
+    function handleGoBack() {
+        setShowConfirmation(false);
+        setPendingRows([]);
+    }
+
+    // Final confirm and submit
+    async function handleConfirm() {
         try {
-            for (const row of validRows) {
+            for (const row of pendingRows) {
                 const payload = {
                     type: row.type,
                     amount: parseFloat(row.amount),
@@ -71,6 +94,74 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
         }
     }
 
+    // Get type label for display
+    const getTypeLabel = (type) => {
+        const labels = { deposit: 'Deposit', withdrawal: 'Withdrawal', interest: 'Interest', fee: 'Fee' };
+        return labels[type] || type;
+    };
+
+    // Confirmation View
+    if (showConfirmation) {
+        return (
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+                    <div className="modal-header">
+                        <h2 className="modal-title">Confirm Cash Movement{pendingRows.length > 1 ? 's' : ''}</h2>
+                        <button className="modal-close" onClick={onClose}>&times;</button>
+                    </div>
+
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--spacing-lg)' }}>
+                        Please review the following {pendingRows.length === 1 ? 'entry' : `${pendingRows.length} entries`} before confirming:
+                    </p>
+
+                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        {pendingRows.map((row, idx) => (
+                            <div key={row.id} className="card" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)' }}>
+                                {pendingRows.length > 1 && (
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 'var(--spacing-sm)' }}>
+                                        Entry {idx + 1}
+                                    </div>
+                                )}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
+                                    <div>
+                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>Type:</span>
+                                        <div style={{ fontWeight: 500 }}>{getTypeLabel(row.type)}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>Amount:</span>
+                                        <div style={{ fontWeight: 600, color: row.type === 'withdrawal' || row.type === 'fee' ? 'var(--danger)' : 'var(--success)' }}>
+                                            {row.type === 'withdrawal' || row.type === 'fee' ? '-' : '+'}{formatCurrency(parseFloat(row.amount))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>Date:</span>
+                                        <div>{formatDate(row.date)}</div>
+                                    </div>
+                                    {row.notes && (
+                                        <div>
+                                            <span className="text-muted" style={{ fontSize: '0.85rem' }}>Notes:</span>
+                                            <div>{row.notes}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="modal-actions" style={{ marginTop: 'var(--spacing-lg)' }}>
+                        <button type="button" className="btn btn-secondary" onClick={handleGoBack}>
+                            ← Go Back
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={handleConfirm}>
+                            ✓ Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Main Entry Form
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%' }}>
@@ -79,7 +170,7 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleReview}>
                     <div style={{ overflowX: 'auto' }}>
                         <table className="data-table" style={{ minWidth: '700px' }}>
                             <thead>
@@ -167,7 +258,7 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
                             Cancel
                         </button>
                         <button type="submit" className="btn btn-primary">
-                            {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
+                            {isEditing ? 'Review Changes' : `Review ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
                         </button>
                     </div>
 
@@ -178,3 +269,4 @@ function CashMovementModal({ onSave, onClose, editingMovement = null, onUpdate =
 }
 
 export default CashMovementModal;
+

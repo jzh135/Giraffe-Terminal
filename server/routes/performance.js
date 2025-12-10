@@ -1,5 +1,7 @@
+
 import { Router } from 'express';
 import db from '../db.js';
+import { calculatePortfolioValue } from '../utils/calculations.js';
 
 const router = Router();
 
@@ -27,8 +29,8 @@ router.get('/', async (req, res) => {
 
         const cashFlows = db.prepare(cashFlowQuery).all(...params);
 
-        // Get current portfolio value
-        const portfolioValue = await calculatePortfolioValue(account_id);
+        // Get current portfolio value using shared logic
+        const portfolioValue = calculatePortfolioValue(db, account_id);
 
         // Calculate Time-Weighted Return (TWR)
         const twr = calculateTWR(cashFlows, portfolioValue);
@@ -99,62 +101,6 @@ router.get('/history', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// Helper: Calculate current portfolio value
-async function calculatePortfolioValue(accountId) {
-    const holdingsQuery = accountId
-        ? 'SELECT symbol, SUM(shares) as shares FROM holdings WHERE account_id = ? GROUP BY symbol'
-        : 'SELECT symbol, SUM(shares) as shares FROM holdings GROUP BY symbol';
-
-    const holdings = accountId
-        ? db.prepare(holdingsQuery).all(accountId)
-        : db.prepare(holdingsQuery).all();
-
-    let totalValue = 0;
-
-    for (const holding of holdings) {
-        const priceRow = db.prepare('SELECT price FROM stock_prices WHERE symbol = ?').get(holding.symbol);
-        const price = priceRow?.price || 0;
-        totalValue += holding.shares * price;
-    }
-
-    // Add cash balance
-    const cashQuery = accountId
-        ? 'SELECT COALESCE(SUM(amount), 0) as total FROM cash_movements WHERE account_id = ?'
-        : 'SELECT COALESCE(SUM(amount), 0) as total FROM cash_movements';
-
-    const cash = accountId
-        ? db.prepare(cashQuery).get(accountId)
-        : db.prepare(cashQuery).get();
-
-    const divQuery = accountId
-        ? 'SELECT COALESCE(SUM(amount), 0) as total FROM dividends WHERE account_id = ?'
-        : 'SELECT COALESCE(SUM(amount), 0) as total FROM dividends';
-
-    const dividends = accountId
-        ? db.prepare(divQuery).get(accountId)
-        : db.prepare(divQuery).get();
-
-    const buysQuery = accountId
-        ? "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'buy'"
-        : "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE type = 'buy'";
-
-    const buys = accountId
-        ? db.prepare(buysQuery).get(accountId)
-        : db.prepare(buysQuery).get();
-
-    const sellsQuery = accountId
-        ? "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'sell'"
-        : "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE type = 'sell'";
-
-    const sells = accountId
-        ? db.prepare(sellsQuery).get(accountId)
-        : db.prepare(sellsQuery).get();
-
-    const cashBalance = cash.total + dividends.total - buys.total + sells.total;
-
-    return totalValue + cashBalance;
-}
 
 // Helper: Calculate Time-Weighted Return
 function calculateTWR(cashFlows, currentValue) {

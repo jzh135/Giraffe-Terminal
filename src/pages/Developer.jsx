@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getAdminStats, resetDatabase, restartServer, getAppSettings, updateAppSettings } from '../api';
+import { getAdminStats, resetDatabase, restartServer, getAppSettings, updateAppSettings, getRoles, createRole, updateRole, deleteRole, getThemes, createTheme, updateTheme, deleteTheme } from '../api';
 import './Developer.css';
 
 function Developer() {
     const [exporting, setExporting] = useState(false);
+    const [importing, setImporting] = useState(false);
     const [stats, setStats] = useState(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const [resetInput, setResetInput] = useState('');
@@ -18,6 +19,20 @@ function Developer() {
     const [logoValue, setLogoValue] = useState('🦒');
     const [savingBrand, setSavingBrand] = useState(false);
 
+    // Roles state
+    const [roles, setRoles] = useState([]);
+    const [newRoleName, setNewRoleName] = useState('');
+    const [newRoleColor, setNewRoleColor] = useState('#4f46e5');
+    const [addingRole, setAddingRole] = useState(false);
+    const [editingRole, setEditingRole] = useState(null);
+
+    // Themes state
+    const [themes, setThemes] = useState([]);
+    const [newThemeName, setNewThemeName] = useState('');
+    const [newThemeColor, setNewThemeColor] = useState('#3b82f6');
+    const [addingTheme, setAddingTheme] = useState(false);
+    const [editingTheme, setEditingTheme] = useState(null);
+
     const [error, setError] = useState(null);
 
     const defaultEmojis = ['🦒', '📈', '💰', '🚀', '💎', '🏆', '⭐', '🎯'];
@@ -25,6 +40,8 @@ function Developer() {
     useEffect(() => {
         loadStats();
         loadSettings();
+        loadRoles();
+        loadThemes();
     }, []);
 
     async function loadStats() {
@@ -49,6 +66,94 @@ function Developer() {
             console.error('Failed to load settings:', err);
         }
     }
+
+    async function loadRoles() {
+        try {
+            const data = await getRoles();
+            setRoles(data || []);
+        } catch (err) {
+            console.error('Failed to load roles:', err);
+        }
+    }
+
+    async function loadThemes() {
+        try {
+            const data = await getThemes();
+            setThemes(data || []);
+        } catch (err) {
+            console.error('Failed to load themes:', err);
+        }
+    }
+
+    const handleAddRole = async () => {
+        if (!newRoleName.trim()) return;
+        setAddingRole(true);
+        try {
+            await createRole({ name: newRoleName.trim(), color: newRoleColor });
+            setNewRoleName('');
+            setNewRoleColor('#4f46e5');
+            await loadRoles();
+        } catch (err) {
+            alert('Failed to add role: ' + err.message);
+        } finally {
+            setAddingRole(false);
+        }
+    };
+
+    const handleUpdateRole = async (id, name, color) => {
+        try {
+            await updateRole(id, { name, color });
+            setEditingRole(null);
+            await loadRoles();
+        } catch (err) {
+            alert('Failed to update role: ' + err.message);
+        }
+    };
+
+    const handleDeleteRole = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this role? Stocks with this role will have their role cleared.')) return;
+        try {
+            await deleteRole(id);
+            await loadRoles();
+        } catch (err) {
+            alert('Failed to delete role: ' + err.message);
+        }
+    };
+
+    const handleAddTheme = async () => {
+        if (!newThemeName.trim()) return;
+        setAddingTheme(true);
+        try {
+            await createTheme({ name: newThemeName.trim(), color: newThemeColor });
+            setNewThemeName('');
+            setNewThemeColor('#3b82f6');
+            await loadThemes();
+        } catch (err) {
+            alert('Failed to add theme: ' + err.message);
+        } finally {
+            setAddingTheme(false);
+        }
+    };
+
+    const handleUpdateTheme = async (id, name, color) => {
+        try {
+            await updateTheme(id, { name, color });
+            setEditingTheme(null);
+            await loadThemes();
+        } catch (err) {
+            alert('Failed to update theme: ' + err.message);
+        }
+    };
+
+    const handleDeleteTheme = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this theme? Stocks with this theme will have their theme cleared.')) return;
+        try {
+            await deleteTheme(id);
+            await loadThemes();
+        } catch (err) {
+            alert('Failed to delete theme: ' + err.message);
+        }
+    };
 
     const handleSaveBranding = async () => {
         setSavingBrand(true);
@@ -114,6 +219,51 @@ function Developer() {
             alert('Failed to export database');
         } finally {
             setExporting(false);
+        }
+    };
+
+    const handleImportDB = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file extension
+        if (!file.name.endsWith('.db')) {
+            alert('Please select a valid SQLite database file (.db)');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            'WARNING: This will replace your current database with the uploaded file. ' +
+            'All existing data will be overwritten. Are you sure you want to continue?'
+        );
+        if (!confirmed) {
+            e.target.value = ''; // Reset file input
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const formData = new FormData();
+            formData.append('database', file);
+
+            const response = await fetch('/api/admin/import-db', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Import failed');
+            }
+
+            alert('Database imported successfully! The page will reload.');
+            window.location.reload();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to import database: ' + err.message);
+        } finally {
+            setImporting(false);
+            e.target.value = ''; // Reset file input
         }
     };
 
@@ -331,6 +481,273 @@ function Developer() {
                 )}
             </div>
 
+            {/* Stock Roles & Themes Section */}
+            <div className="dev-section">
+                <div className="dev-section-header">
+                    <h2 className="dev-section-title">
+                        <span className="dev-section-icon">🏷️</span>
+                        Stock Roles & Themes
+                    </h2>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+                    {/* Roles Column */}
+                    <div className="dev-branding-card">
+                        <div style={{ padding: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 700 }}>Roles</h3>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                                Categorize stocks by size (e.g., Large Cap, ETF)
+                            </p>
+
+                            {/* Add new role */}
+                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="New role name..."
+                                    value={newRoleName}
+                                    onChange={(e) => setNewRoleName(e.target.value)}
+                                    style={{ flex: 1 }}
+                                />
+                                <input
+                                    type="color"
+                                    value={newRoleColor}
+                                    onChange={(e) => setNewRoleColor(e.target.value)}
+                                    style={{ width: '42px', height: '42px', padding: '2px', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAddRole}
+                                    disabled={addingRole || !newRoleName.trim()}
+                                    style={{ padding: '0.5rem 1rem' }}
+                                >
+                                    {addingRole ? '...' : '+'}
+                                </button>
+                            </div>
+
+                            {/* Roles list */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                                {roles.length === 0 ? (
+                                    <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                                        No roles defined yet
+                                    </div>
+                                ) : (
+                                    roles.map(role => (
+                                        <div
+                                            key={role.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                padding: '0.5rem 0.75rem',
+                                                background: 'var(--bg-tertiary)',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: '1px solid var(--border-color)'
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    width: '14px',
+                                                    height: '14px',
+                                                    borderRadius: '50%',
+                                                    background: role.color || '#666',
+                                                    flexShrink: 0
+                                                }}
+                                            />
+                                            {editingRole === role.id ? (
+                                                <>
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        defaultValue={role.name}
+                                                        id={`edit-role-${role.id}`}
+                                                        style={{ flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                                                    />
+                                                    <input
+                                                        type="color"
+                                                        defaultValue={role.color || '#666'}
+                                                        id={`edit-color-${role.id}`}
+                                                        style={{ width: '28px', height: '28px', padding: '1px', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                    />
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => {
+                                                            const name = document.getElementById(`edit-role-${role.id}`).value;
+                                                            const color = document.getElementById(`edit-color-${role.id}`).value;
+                                                            handleUpdateRole(role.id, name, color);
+                                                        }}
+                                                        title="Save"
+                                                        style={{ padding: '0.25rem' }}
+                                                    >
+                                                        ✓
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => setEditingRole(null)}
+                                                        title="Cancel"
+                                                        style={{ padding: '0.25rem' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span style={{ flex: 1, fontWeight: 600, fontSize: '0.875rem' }}>{role.name}</span>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => setEditingRole(role.id)}
+                                                        title="Edit"
+                                                        style={{ padding: '0.25rem', fontSize: '0.75rem' }}
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => handleDeleteRole(role.id)}
+                                                        title="Delete"
+                                                        style={{ padding: '0.25rem', fontSize: '0.75rem' }}
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Themes Column */}
+                    <div className="dev-branding-card">
+                        <div style={{ padding: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 700 }}>Themes</h3>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                                Categorize stocks by sector (e.g., Technology, Healthcare)
+                            </p>
+
+                            {/* Add new theme */}
+                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="New theme name..."
+                                    value={newThemeName}
+                                    onChange={(e) => setNewThemeName(e.target.value)}
+                                    style={{ flex: 1 }}
+                                />
+                                <input
+                                    type="color"
+                                    value={newThemeColor}
+                                    onChange={(e) => setNewThemeColor(e.target.value)}
+                                    style={{ width: '42px', height: '42px', padding: '2px', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAddTheme}
+                                    disabled={addingTheme || !newThemeName.trim()}
+                                    style={{ padding: '0.5rem 1rem' }}
+                                >
+                                    {addingTheme ? '...' : '+'}
+                                </button>
+                            </div>
+
+                            {/* Themes list */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                                {themes.length === 0 ? (
+                                    <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                                        No themes defined yet
+                                    </div>
+                                ) : (
+                                    themes.map(theme => (
+                                        <div
+                                            key={theme.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                padding: '0.5rem 0.75rem',
+                                                background: 'var(--bg-tertiary)',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: '1px solid var(--border-color)'
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    width: '14px',
+                                                    height: '14px',
+                                                    borderRadius: '50%',
+                                                    background: theme.color || '#666',
+                                                    flexShrink: 0
+                                                }}
+                                            />
+                                            {editingTheme === theme.id ? (
+                                                <>
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        defaultValue={theme.name}
+                                                        id={`edit-theme-${theme.id}`}
+                                                        style={{ flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                                                    />
+                                                    <input
+                                                        type="color"
+                                                        defaultValue={theme.color || '#666'}
+                                                        id={`edit-theme-color-${theme.id}`}
+                                                        style={{ width: '28px', height: '28px', padding: '1px', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                    />
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => {
+                                                            const name = document.getElementById(`edit-theme-${theme.id}`).value;
+                                                            const color = document.getElementById(`edit-theme-color-${theme.id}`).value;
+                                                            handleUpdateTheme(theme.id, name, color);
+                                                        }}
+                                                        title="Save"
+                                                        style={{ padding: '0.25rem' }}
+                                                    >
+                                                        ✓
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => setEditingTheme(null)}
+                                                        title="Cancel"
+                                                        style={{ padding: '0.25rem' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span style={{ flex: 1, fontWeight: 600, fontSize: '0.875rem' }}>{theme.name}</span>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => setEditingTheme(theme.id)}
+                                                        title="Edit"
+                                                        style={{ padding: '0.25rem', fontSize: '0.75rem' }}
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-icon"
+                                                        onClick={() => handleDeleteTheme(theme.id)}
+                                                        title="Delete"
+                                                        style={{ padding: '0.25rem', fontSize: '0.75rem' }}
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
             <div className="dev-section">
                 <div className="dev-section-header">
                     <h2 className="dev-section-title">
@@ -424,6 +841,39 @@ function Developer() {
                             </>
                         )}
                     </button>
+                </div>
+
+                <div className="dev-action-card dev-import-card">
+                    <div className="dev-action-header">
+                        <div className="dev-action-icon-wrapper" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
+                            <span className="dev-action-icon">⬆</span>
+                        </div>
+                        <h3 className="dev-action-title">Import Database</h3>
+                    </div>
+                    <p className="dev-action-description">
+                        Restore from a backup file. This will replace all current data with the uploaded database.
+                    </p>
+
+                    <label className={`dev-action-btn dev-import-btn ${importing ? 'disabled' : ''}`}>
+                        {importing ? (
+                            <>
+                                <span className="dev-btn-spinner"></span>
+                                Importing...
+                            </>
+                        ) : (
+                            <>
+                                <span className="dev-btn-icon">⬆</span>
+                                Import Database
+                            </>
+                        )}
+                        <input
+                            type="file"
+                            accept=".db"
+                            onChange={handleImportDB}
+                            disabled={importing}
+                            style={{ display: 'none' }}
+                        />
+                    </label>
                 </div>
 
                 <div className="dev-action-card dev-restart-card">

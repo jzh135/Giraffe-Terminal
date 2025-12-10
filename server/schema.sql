@@ -74,9 +74,9 @@ CREATE TABLE IF NOT EXISTS stock_prices (
   symbol TEXT PRIMARY KEY,
   price REAL NOT NULL,
   name TEXT,
-  market_cap REAL,
-  theme TEXT,
-  strategy TEXT,
+  role_id INTEGER REFERENCES stock_roles(id),
+  theme_id INTEGER REFERENCES stock_themes(id),
+  overall_rating REAL,
   valuation_rating REAL,
   growth_quality_rating REAL,
   econ_moat_rating REAL,
@@ -85,6 +85,25 @@ CREATE TABLE IF NOT EXISTS stock_prices (
   research_updated_at TEXT,
   updated_at TEXT NOT NULL
 );
+
+-- User-defined stock roles
+CREATE TABLE IF NOT EXISTS stock_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  color TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- User-defined stock themes
+CREATE TABLE IF NOT EXISTS stock_themes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  color TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 
 -- Application settings
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -107,3 +126,4 @@ CREATE INDEX IF NOT EXISTS idx_dividends_account ON dividends(account_id);
 CREATE INDEX IF NOT EXISTS idx_dividends_symbol ON dividends(symbol);
 CREATE INDEX IF NOT EXISTS idx_cash_movements_account ON cash_movements(account_id);
 CREATE INDEX IF NOT EXISTS idx_stock_splits_symbol ON stock_splits(symbol);
+

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { calculateCashBalance, calculateRealizedGain } from '../utils/calculations.js';
+import { validateRequired } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -8,10 +10,10 @@ router.get('/', (req, res) => {
     try {
         const accounts = db.prepare('SELECT * FROM accounts ORDER BY name').all();
 
-        // Calculate cash balance for each account
+        // Calculate cash balance for each account using shared logic
         const accountsWithBalance = accounts.map(account => {
-            const cashBalance = calculateCashBalance(account.id);
-            const realizedGain = calculateRealizedGain(account.id);
+            const cashBalance = calculateCashBalance(db, account.id);
+            const realizedGain = calculateRealizedGain(db, account.id);
             return { ...account, cash_balance: cashBalance, realized_gain: realizedGain };
         });
 
@@ -29,8 +31,8 @@ router.get('/:id', (req, res) => {
             return res.status(404).json({ error: 'Account not found' });
         }
 
-        account.cash_balance = calculateCashBalance(account.id);
-        account.realized_gain = calculateRealizedGain(account.id);
+        account.cash_balance = calculateCashBalance(db, account.id);
+        account.realized_gain = calculateRealizedGain(db, account.id);
         res.json(account);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -38,9 +40,10 @@ router.get('/:id', (req, res) => {
 });
 
 // Create account
-router.post('/', (req, res) => {
+router.post('/', validateRequired(['name']), (req, res) => {
     try {
         const { name, type, institution } = req.body;
+
         const result = db.prepare(
             'INSERT INTO accounts (name, type, institution) VALUES (?, ?, ?)'
         ).run(name, type || 'brokerage', institution || null);
@@ -54,9 +57,10 @@ router.post('/', (req, res) => {
 });
 
 // Update account
-router.put('/:id', (req, res) => {
+router.put('/:id', validateRequired(['name']), (req, res) => {
     try {
         const { name, type, institution } = req.body;
+
         db.prepare(
             'UPDATE accounts SET name = ?, type = ?, institution = ? WHERE id = ?'
         ).run(name, type, institution, req.params.id);
@@ -65,7 +69,7 @@ router.put('/:id', (req, res) => {
         if (!account) {
             return res.status(404).json({ error: 'Account not found' });
         }
-        account.cash_balance = calculateCashBalance(account.id);
+        account.cash_balance = calculateCashBalance(db, account.id);
         res.json(account);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -84,50 +88,5 @@ router.delete('/:id', (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// Helper: Calculate cash balance for an account
-function calculateCashBalance(accountId) {
-    // Cash movements (deposits, withdrawals, fees, interest)
-    const cashMovements = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM cash_movements WHERE account_id = ?'
-    ).get(accountId);
-
-    // Dividends received
-    const dividends = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM dividends WHERE account_id = ?'
-    ).get(accountId);
-
-    // Stock buys (subtract from cash)
-    const buys = db.prepare(
-        "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'buy'"
-    ).get(accountId);
-
-    // Stock sells (add to cash)
-    const sells = db.prepare(
-        "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'sell'"
-    ).get(accountId);
-
-    // Realized Gains (stored in generated column for new transactions, or calculated?)
-    // Actually, we just need to return it separately or add it to the account object? 
-    // The user wants to SEE realized gain/loss. So let's fetch it.
-    // We'll return it as part of the balance or a new field? New field is better logic.
-    // But this function is 'calculateCashBalance'.
-    // I should modify the ROUTE to fetch this separately.
-
-    return cashMovements.total + dividends.total - buys.total + sells.total;
-}
-
-// Helper: Calculate realized gain for an account
-function calculateRealizedGain(accountId) {
-    const transactions = db.prepare(
-        "SELECT COALESCE(SUM(realized_gain), 0) as total FROM transactions WHERE account_id = ?"
-    ).get(accountId);
-
-    const dividends = db.prepare(
-        "SELECT COALESCE(SUM(amount), 0) as total FROM dividends WHERE account_id = ?"
-    ).get(accountId);
-
-    return transactions.total + dividends.total;
-}
 
 export default router;

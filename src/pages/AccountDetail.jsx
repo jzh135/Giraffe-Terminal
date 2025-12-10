@@ -259,8 +259,50 @@ function AccountDetail() {
     }, 0);
     const totalValue = marketValue + (account ? account.cash_balance : 0);
 
+    // Calculate realized gains metrics for this account
+    const realizedGainMetrics = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+
+        // Trade realized gains (from sell transactions with realized_gain)
+        const tradeGains = safeTransactions
+            .filter(t => t.type === 'sell' && t.realized_gain != null)
+            .reduce((sum, t) => sum + t.realized_gain, 0);
+
+        // YTD Trade realized gains
+        const ytdTradeGains = safeTransactions
+            .filter(t => {
+                if (t.type !== 'sell' || t.realized_gain == null) return false;
+                const txYear = new Date(t.date + 'T00:00:00').getFullYear();
+                return txYear === currentYear;
+            })
+            .reduce((sum, t) => sum + t.realized_gain, 0);
+
+        // Total dividends
+        const totalDividends = safeDividends.reduce((sum, d) => sum + d.amount, 0);
+
+        // Total interest from cash movements
+        const totalInterest = safeCashMovements
+            .filter(c => c.type === 'interest')
+            .reduce((sum, c) => sum + c.amount, 0);
+
+        // Total realized (trade gains + dividends + interest)
+        const totalRealized = tradeGains + totalDividends + totalInterest;
+
+        return {
+            totalRealized,
+            tradeGains,
+            ytdTradeGains,
+            totalDividends,
+            totalInterest
+        };
+    }, [safeTransactions, safeDividends, safeCashMovements]);
+
     const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-    const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString();
+    // Add T00:00:00 to parse as local time, not UTC
+    const formatDate = (dateStr) => {
+        const date = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString();
+    };
 
     const formatPercent = (val) => new Intl.NumberFormat('en-US', {
         style: 'percent',
@@ -313,10 +355,35 @@ function AccountDetail() {
                         {formatCurrency(account.cash_balance)}
                     </div>
                 </div>
+            </div>
+
+            {/* Realized Gains Stats */}
+            <div className="stats-grid" style={{ marginTop: 'var(--spacing-md)' }}>
                 <div className="stat-card">
-                    <div className="stat-label">Realized Gain/Loss</div>
-                    <div className={`stat-value ${account.realized_gain >= 0 ? 'text-positive' : 'text-negative'}`}>
-                        {formatCurrency(account.realized_gain)}
+                    <div className="stat-label">Total Realized (All)</div>
+                    <div className={`stat-value ${realizedGainMetrics.totalRealized >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        {realizedGainMetrics.totalRealized >= 0 ? '+' : ''}{formatCurrency(realizedGainMetrics.totalRealized)}
+                    </div>
+                    <div className="stat-change" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        Trades, dividends & interest
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Trade Gain/Loss</div>
+                    <div className={`stat-value ${realizedGainMetrics.tradeGains >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        {realizedGainMetrics.tradeGains >= 0 ? '+' : ''}{formatCurrency(realizedGainMetrics.tradeGains)}
+                    </div>
+                    <div className="stat-change" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        Sell transactions only
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">YTD Trade Gain/Loss</div>
+                    <div className={`stat-value ${realizedGainMetrics.ytdTradeGains >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        {realizedGainMetrics.ytdTradeGains >= 0 ? '+' : ''}{formatCurrency(realizedGainMetrics.ytdTradeGains)}
+                    </div>
+                    <div className="stat-change" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        {new Date().getFullYear()} • For tax purposes
                     </div>
                 </div>
             </div>

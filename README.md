@@ -87,9 +87,12 @@ Once running, the application will be available at:
 giraffe-terminal/
 ├── server/              # Backend Express server
 │   ├── index.js         # Server entry point
-│   ├── db.js            # Database configuration
+│   ├── db.js            # Database entry point
+│   ├── migrations.js    # Database migrations
 │   ├── schema.sql       # Database schema
-│   └── routes/          # API route handlers
+│   ├── routes/          # API route handlers
+│   ├── utils/           # Shared utility functions
+│   └── middleware/      # Express middleware
 ├── src/                 # Frontend React application
 │   ├── components/      # Reusable components
 │   ├── pages/           # Page components
@@ -178,7 +181,23 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-## 📄 License
+## � Dev Log
+
+- **2025-12-09**: Version **alpha-1**
+  - **Core Architecture**:
+    - Major backend refactoring: Centralized cash balance, portfolio value, and realized gain calculations.
+    - Modularized database migrations system for better maintainability.
+    - Implemented input validation middleware for robust API security.
+  - **Features**:
+    - Added **Developer Tools**: Database export and custom branding (App Name/Logo).
+    - Enhanced **Trade Module**: Added support for specific tax lot selection when selling.
+    - Improved **Financial Tracking**: Realized gains accuracy improved; now accounts for dividends correctly.
+    - Added manual data entry support for Market Cap.
+  - **System**:
+    - Optimized `start-server.bat` and `install.bat` for smoother Windows deployment.
+    - Fixed various UI display bugs (Market Cap, Cash movements).
+
+## �📄 License
 
 This is a personal portfolio management application.
 

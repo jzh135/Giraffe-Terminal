@@ -12,6 +12,8 @@ import stockSplitsRouter from './routes/stockSplits.js';
 import pricesRouter from './routes/prices.js';
 import performanceRouter from './routes/performance.js';
 import adminRouter from './routes/admin.js';
+import rolesRouter from './routes/roles.js';
+import themesRouter from './routes/themes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -36,6 +38,8 @@ app.use('/api/stock-splits', stockSplitsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/performance', performanceRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/roles', rolesRouter);
+app.use('/api/themes', themesRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

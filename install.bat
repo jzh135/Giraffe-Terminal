@@ -1,106 +1,83 @@
 @echo off
-REM Giraffe Terminal - Installation Script
-REM Run this batch file for first-time setup
+setlocal
+title Giraffe Terminal Installer
 
-echo ========================================
-echo   🦒 Giraffe Terminal - First Time Setup
-echo ========================================
+echo ===============================================================================
+echo   🦒 Giraffe Terminal - Installation
+echo ===============================================================================
 echo.
 
 REM Change to the project directory
 cd /d "%~dp0"
 
+echo [STEP 1/3] Checking Environment...
+echo.
+
 REM Check if Node.js is installed
 where node >nul 2>nul
 if errorlevel 1 (
-    echo [INFO] Node.js is not installed. Attempting to install...
+    echo [ERROR] Node.js is not installed.
+    echo.
+    echo Please install Node.js from https://nodejs.org/
     echo.
     
-    REM Check if winget is available
+    REM Try to use winget if available
     where winget >nul 2>nul
-    if errorlevel 1 (
-        echo [ERROR] Windows Package Manager (winget) is not available.
+    if not errorlevel 1 (
+        echo Attempting to install via Windows Package Manager (winget)...
+        echo This will ask for administrator access.
         echo.
-        echo Please install Node.js manually from: https://nodejs.org/
-        echo After installation, restart this script.
+        winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+        
+        if errorlevel 1 (
+            echo.
+            echo [FAILED] Automatic installation failed.
+            echo Please install manually and restart this script.
+            pause
+            exit /b 1
+        )
+        
         echo.
+        echo Node.js installed! Please restart this window for changes to take effect.
+        pause
+        exit /b 0
+    ) else (
+        echo Winget not found. Please install manually.
         pause
         exit /b 1
     )
-    
-    echo Installing Node.js via Windows Package Manager...
-    echo This may require administrator privileges.
-    echo.
-    winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
-    
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to install Node.js automatically.
-        echo Please install Node.js manually from: https://nodejs.org/
-        echo After installation, restart this script.
-        echo.
-        pause
-        exit /b 1
-    )
-    
-    echo.
-    echo [SUCCESS] Node.js installed successfully!
-    echo.
-    echo ========================================
-    echo   IMPORTANT: Please restart this script
-    echo   to complete the installation.
-    echo ========================================
-    echo.
-    pause
-    exit /b 0
 )
 
-REM Display Node.js version
-echo Detected Node.js version:
+echo Node.js detected:
 node --version
 echo.
 
-REM Check if npm is available
-where npm >nul 2>nul
-if errorlevel 1 (
-    echo [ERROR] npm is not installed or not in PATH.
-    echo.
-    echo Please ensure npm is installed with Node.js.
-    echo.
-    pause
-    exit /b 1
-)
-
-REM Display npm version
-echo Detected npm version:
-npm --version
+echo [STEP 2/3] Installing Dependencies...
 echo.
-
-REM Install dependencies
-echo ========================================
-echo Installing dependencies...
-echo ========================================
+echo This may take a few minutes...
 echo.
 
 call npm install
 
 if errorlevel 1 (
     echo.
-    echo [ERROR] Failed to install dependencies.
-    echo Please check the error messages above.
-    echo.
+    echo [ERROR] npm install failed.
+    echo Please check your internet connection or error logs.
     pause
     exit /b 1
 )
 
 echo.
-echo ========================================
+echo [STEP 3/3] Finalizing...
+
+REM Ensure data folder exists (optional, but good practice)
+if not exist "data" mkdir "data"
+
+echo.
+echo ===============================================================================
 echo   ✅ Installation Complete!
-echo ========================================
+echo ===============================================================================
 echo.
-echo You can now run 'start-server.bat' to launch Giraffe Terminal.
-echo.
-echo Frontend will be available at: http://localhost:5173
-echo Backend API will be available at: http://localhost:3001
+echo You can now use 'start-server.bat' to launch the application.
 echo.
 pause

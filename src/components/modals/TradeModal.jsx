@@ -25,6 +25,11 @@ function TradeModal({
     const [editingNoteRowId, setEditingNoteRowId] = useState(null);
     const [selectedAccountId, setSelectedAccountId] = useState(initialAccountId || '');
 
+    // Confirmation state
+    const [showConfirmation, setShowConfirmation] = useState(false);
+    const [pendingRows, setPendingRows] = useState([]);
+    const [pendingTab, setPendingTab] = useState(null);
+
     // Unique symbols for dropdowns
     const uniqueSymbols = [...new Set(holdings.map(h => h.symbol))].sort();
 
@@ -189,73 +194,83 @@ function TradeModal({
         return holdings.filter(h => h.symbol === symbol).sort((a, b) => new Date(a.purchase_date) - new Date(b.purchase_date));
     };
 
-    // Submit Handler
-    async function handleSubmit(e) {
+    // Format currency for display
+    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+
+    // Format date for display
+    const formatDate = (dateStr) => {
+        const date = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    // Handle review (show confirmation)
+    function handleReview(e) {
         e.preventDefault();
-
-        // Process all rows
-        // We'll execute them sequentially to avoid race conditions in the backend/loading states if any
-        // Ideally we'd have a batch API, but for now we loop.
-
         const validRows = rows.filter(r => {
             if (activeTab === 'buy') return r.symbol && r.shares && r.price;
             if (activeTab === 'sell') return r.lotId && r.shares && r.price;
             if (activeTab === 'dividend') return r.symbol && r.amount;
-
             return false;
         });
-
         if (validRows.length === 0) return;
+        setPendingRows(validRows);
+        setPendingTab(activeTab);
+        setShowConfirmation(true);
+    }
 
+    // Go back to edit
+    function handleGoBack() {
+        setShowConfirmation(false);
+        setPendingRows([]);
+        setPendingTab(null);
+    }
+
+    // Final confirm and submit
+    async function handleConfirm() {
         try {
-            for (const row of validRows) {
+            for (const row of pendingRows) {
                 const commonData = {
                     date: row.date,
                     notes: row.notes
                 };
 
                 const payload = { ...commonData };
-                if (activeTab === 'dividend') {
+                if (pendingTab === 'dividend') {
                     payload.symbol = row.symbol.toUpperCase();
                     payload.amount = parseFloat(row.amount);
                 } else {
                     payload.symbol = row.symbol.toUpperCase();
                     payload.shares = parseFloat(row.shares);
                     payload.price = parseFloat(row.price);
-                    if (activeTab === 'sell') {
+                    if (pendingTab === 'sell') {
                         payload.holding_id = row.lotId;
                     }
                 }
 
                 if (isEditing) {
-                    // Update existing
                     await onUpdate(editingTransaction.id, {
                         ...payload,
-                        type: activeTab // preserve or update type
+                        type: pendingTab
                     });
                 } else {
-                    // Create new
-                    // Get account_id from initial context or selected dropdown
                     const accountId = initialAccountId || selectedAccountId;
 
-                    if (activeTab === 'buy') {
+                    if (pendingTab === 'buy') {
                         await onBuy({
                             ...payload,
                             account_id: accountId,
                             cost_basis: payload.shares * payload.price,
                             purchase_date: payload.date
                         });
-                    } else if (activeTab === 'sell') {
-                        // Verify lot validity
+                    } else if (pendingTab === 'sell') {
                         const lot = holdings.find(h => h.id == row.lotId);
                         if (!lot) continue;
-
                         await onSell({
                             ...payload,
                             holding_id: lot.id,
                             account_id: lot.account_id
                         });
-                    } else if (activeTab === 'dividend') {
+                    } else if (pendingTab === 'dividend') {
                         await onDividend({
                             ...payload,
                             account_id: accountId
@@ -270,8 +285,133 @@ function TradeModal({
         }
     }
 
+    // Get lot info for display in confirmation
+    const getLotInfo = (lotId) => {
+        const lot = holdings.find(h => h.id == lotId);
+        if (!lot) return 'Unknown lot';
+        return `${lot.account_name} • ${formatDate(lot.purchase_date)} • ${lot.shares} shares`;
+    };
+
     // --- Render Helpers ---
 
+    // Confirmation View
+    if (showConfirmation) {
+        const getTabLabel = (tab) => {
+            const labels = { buy: 'Buy', sell: 'Sell', dividend: 'Dividend' };
+            return labels[tab] || tab;
+        };
+
+        return (
+            <>
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%' }}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">Confirm {getTabLabel(pendingTab)}{pendingRows.length > 1 ? 's' : ''}</h2>
+                            <button className="modal-close" onClick={onClose}>&times;</button>
+                        </div>
+
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--spacing-lg)' }}>
+                            Please review the following {pendingRows.length === 1 ? 'entry' : `${pendingRows.length} entries`} before confirming:
+                        </p>
+
+                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                            {pendingRows.map((row, idx) => (
+                                <div key={row.id} className="card" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)' }}>
+                                    {pendingRows.length > 1 && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 'var(--spacing-sm)' }}>
+                                            Entry {idx + 1}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-sm)' }}>
+                                        <div>
+                                            <span className="text-muted" style={{ fontSize: '0.85rem' }}>Type:</span>
+                                            <div style={{ fontWeight: 500 }}>
+                                                <span className={`badge ${pendingTab === 'buy' ? 'badge-success' : pendingTab === 'sell' ? 'badge-danger' : 'badge-warning'}`}>
+                                                    {getTabLabel(pendingTab)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted" style={{ fontSize: '0.85rem' }}>Symbol:</span>
+                                            <div style={{ fontWeight: 600 }}>{row.symbol}</div>
+                                        </div>
+                                        {pendingTab !== 'dividend' && (
+                                            <>
+                                                <div>
+                                                    <span className="text-muted" style={{ fontSize: '0.85rem' }}>Shares:</span>
+                                                    <div>{parseFloat(row.shares).toLocaleString()}</div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted" style={{ fontSize: '0.85rem' }}>Price:</span>
+                                                    <div>{formatCurrency(parseFloat(row.price))}</div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted" style={{ fontSize: '0.85rem' }}>Total:</span>
+                                                    <div style={{ fontWeight: 600 }}>{formatCurrency(parseFloat(row.shares) * parseFloat(row.price))}</div>
+                                                </div>
+                                            </>
+                                        )}
+                                        {pendingTab === 'dividend' && (
+                                            <div>
+                                                <span className="text-muted" style={{ fontSize: '0.85rem' }}>Amount:</span>
+                                                <div style={{ fontWeight: 600, color: 'var(--success)' }}>+{formatCurrency(parseFloat(row.amount))}</div>
+                                            </div>
+                                        )}
+                                        {pendingTab === 'sell' && row.lotId && (() => {
+                                            const lot = holdings.find(h => h.id == row.lotId);
+                                            const costBasisPerShare = lot ? lot.cost_basis / lot.shares : 0;
+                                            const proceeds = parseFloat(row.shares) * parseFloat(row.price);
+                                            const costBasis = parseFloat(row.shares) * costBasisPerShare;
+                                            const realizedGain = proceeds - costBasis;
+                                            return (
+                                                <>
+                                                    <div style={{ gridColumn: '1 / -1' }}>
+                                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>From Lot:</span>
+                                                        <div style={{ fontSize: '0.9rem' }}>{getLotInfo(row.lotId)}</div>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>Cost Basis:</span>
+                                                        <div>{formatCurrency(costBasis)}</div>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-muted" style={{ fontSize: '0.85rem' }}>Realized Gain/Loss:</span>
+                                                        <div style={{ fontWeight: 600, color: realizedGain >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                                            {realizedGain >= 0 ? '+' : ''}{formatCurrency(realizedGain)}
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                        <div>
+                                            <span className="text-muted" style={{ fontSize: '0.85rem' }}>Date:</span>
+                                            <div>{formatDate(row.date)}</div>
+                                        </div>
+                                        {row.notes && (
+                                            <div>
+                                                <span className="text-muted" style={{ fontSize: '0.85rem' }}>Notes:</span>
+                                                <div>{row.notes}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="modal-actions" style={{ marginTop: 'var(--spacing-lg)' }}>
+                            <button type="button" className="btn btn-secondary" onClick={handleGoBack}>
+                                ← Go Back
+                            </button>
+                            <button type="button" className="btn btn-primary" onClick={handleConfirm}>
+                                ✓ Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    // Main Form View
     return (
         <>
             <div className="modal-overlay" onClick={onClose}>
@@ -296,7 +436,7 @@ function TradeModal({
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleReview}>
                         {/* Account selector for buy/dividend when no initial account */}
                         {!isEditing && !initialAccountId && (activeTab === 'buy' || activeTab === 'dividend') && accounts.length > 0 && (
                             <div style={{ marginBottom: '16px' }}>
@@ -439,7 +579,7 @@ function TradeModal({
                                                                     <option value="">Select Lot...</option>
                                                                     {getAvailableLots(row.symbol).map(lot => (
                                                                         <option key={lot.id} value={lot.id}>
-                                                                            {lot.account_name} • {new Date(lot.purchase_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })} • {lot.shares} shares @ ${(lot.cost_basis / lot.shares).toFixed(2)}
+                                                                            {lot.account_name} • {new Date(lot.purchase_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })} • {lot.shares} shares @ ${(lot.cost_basis / lot.shares).toFixed(2)}
                                                                         </option>
                                                                     ))}
                                                                 </select>
@@ -594,7 +734,7 @@ function TradeModal({
                                 Cancel
                             </button>
                             <button type="submit" className="btn btn-primary">
-                                {isEditing ? 'Save Changes' : `Submit ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
+                                {isEditing ? 'Review Changes' : `Review ${rows.length} ${rows.length === 1 ? 'Entry' : 'Entries'}`}
                             </button>
                         </div>
 

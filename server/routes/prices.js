@@ -8,14 +8,21 @@ router.get('/', (req, res) => {
     try {
         const { symbols } = req.query;
 
+        const baseQuery = `
+            SELECT sp.*, sr.name as role_name, sr.color as role_color, st.name as theme_name, st.color as theme_color
+            FROM stock_prices sp
+            LEFT JOIN stock_roles sr ON sp.role_id = sr.id
+            LEFT JOIN stock_themes st ON sp.theme_id = st.id
+        `;
+
         if (!symbols) {
-            const prices = db.prepare('SELECT * FROM stock_prices ORDER BY symbol').all();
+            const prices = db.prepare(baseQuery + ' ORDER BY sp.symbol').all();
             return res.json(prices);
         }
 
         const symbolList = symbols.split(',').map(s => s.trim().toUpperCase());
         const placeholders = symbolList.map(() => '?').join(',');
-        const prices = db.prepare(`SELECT * FROM stock_prices WHERE symbol IN (${placeholders})`).all(...symbolList);
+        const prices = db.prepare(baseQuery + ` WHERE sp.symbol IN (${placeholders})`).all(...symbolList);
 
         res.json(prices);
     } catch (err) {
@@ -79,7 +86,16 @@ router.get('/fetch/:symbol', async (req, res) => {
             ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
         `).run(symbol, price.price, price.name, now, price.price, price.name, now);
 
-        res.json({ symbol, ...price, updated_at: now });
+        // Return with joined role/theme data
+        const result = db.prepare(`
+            SELECT sp.*, sr.name as role_name, sr.color as role_color, st.name as theme_name, st.color as theme_color
+            FROM stock_prices sp
+            LEFT JOIN stock_roles sr ON sp.role_id = sr.id
+            LEFT JOIN stock_themes st ON sp.theme_id = st.id
+            WHERE sp.symbol = ?
+        `).get(symbol);
+
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -89,7 +105,7 @@ router.get('/fetch/:symbol', async (req, res) => {
 router.put('/:symbol', (req, res) => {
     try {
         const symbol = req.params.symbol.toUpperCase();
-        const { theme, strategy, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, market_cap } = req.body;
+        const { theme_id, role_id, overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating } = req.body;
 
         const now = new Date().toISOString();
 
@@ -100,33 +116,42 @@ router.put('/:symbol', (req, res) => {
             // Update research fields
             db.prepare(`
                 UPDATE stock_prices SET 
-                    theme = ?, 
-                    strategy = ?, 
+                    theme_id = COALESCE(?, theme_id),
+                    role_id = COALESCE(?, role_id),
+                    overall_rating = ?,
                     valuation_rating = ?, 
                     growth_quality_rating = ?, 
                     econ_moat_rating = ?, 
                     leadership_rating = ?, 
                     financial_health_rating = ?,
-                    market_cap = COALESCE(?, market_cap),
                     research_updated_at = ?
                 WHERE symbol = ?
-            `).run(theme || null, strategy || null, valuation_rating ?? null, growth_quality_rating ?? null,
-                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, market_cap ?? null, now, symbol);
+            `).run(theme_id ?? null, role_id ?? null, overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, now, symbol);
         } else {
             // Insert new row with research fields
             db.prepare(`
-                INSERT INTO stock_prices (symbol, price, name, theme, strategy, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, market_cap, research_updated_at, updated_at)
+                INSERT INTO stock_prices (symbol, price, name, theme_id, role_id, overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, research_updated_at, updated_at)
                 VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(symbol, symbol, theme || null, strategy || null, valuation_rating ?? null, growth_quality_rating ?? null,
-                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, market_cap ?? null, now, now);
+            `).run(symbol, symbol, theme_id ?? null, role_id ?? null, overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, now, now);
         }
 
-        const updated = db.prepare('SELECT * FROM stock_prices WHERE symbol = ?').get(symbol);
+        // Return the updated record with joined role/theme names
+        const updated = db.prepare(`
+            SELECT sp.*, sr.name as role_name, sr.color as role_color, st.name as theme_name, st.color as theme_color
+            FROM stock_prices sp
+            LEFT JOIN stock_roles sr ON sp.role_id = sr.id
+            LEFT JOIN stock_themes st ON sp.theme_id = st.id
+            WHERE sp.symbol = ?
+        `).get(symbol);
         res.json(updated);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 
 // Helper: Fetch price from Yahoo Finance
 async function fetchYahooPrice(symbol) {

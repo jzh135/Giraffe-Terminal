@@ -101,3 +101,17 @@ export const getPerformanceHistory = (accountId) => {
     const params = accountId ? `?account_id=${accountId}` : '';
     return request(`/performance/history${params}`);
 };
+
+// Stock Roles
+export const getRoles = () => request('/roles');
+export const createRole = (data) => request('/roles', { method: 'POST', body: data });
+export const updateRole = (id, data) => request(`/roles/${id}`, { method: 'PUT', body: data });
+export const deleteRole = (id) => request(`/roles/${id}`, { method: 'DELETE' });
+
+// Stock Themes
+export const getThemes = () => request('/themes');
+export const createTheme = (data) => request('/themes', { method: 'POST', body: data });
+export const updateTheme = (id, data) => request(`/themes/${id}`, { method: 'PUT', body: data });
+export const deleteTheme = (id) => request(`/themes/${id}`, { method: 'DELETE' });
+
+

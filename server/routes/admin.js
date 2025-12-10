@@ -2,11 +2,25 @@ import express from 'express';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import multer from 'multer';
 import db from '../db.js';
 
 const router = express.Router();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dbPath = join(__dirname, '..', '..', 'data', 'giraffe.db');
+
+// Configure multer for database uploads
+const upload = multer({
+    dest: join(__dirname, '..', '..', 'data', 'uploads'),
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.originalname.endsWith('.db')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only .db files are allowed'));
+        }
+    }
+});
 
 // Export database
 router.get('/export-db', (req, res) => {
@@ -15,6 +29,68 @@ router.get('/export-db', (req, res) => {
     } catch (err) {
         console.error('Export failed:', err);
         res.status(500).json({ error: 'Failed to export database' });
+    }
+});
+
+// Import database
+router.post('/import-db', upload.single('database'), async (req, res) => {
+    const uploadedFile = req.file;
+
+    if (!uploadedFile) {
+        return res.status(400).json({ error: 'No file uploaded', message: 'Please select a database file' });
+    }
+
+    try {
+        // Validate it's a SQLite database by checking the header
+        const header = Buffer.alloc(16);
+        const fd = fs.openSync(uploadedFile.path, 'r');
+        fs.readSync(fd, header, 0, 16, 0);
+        fs.closeSync(fd);
+
+        const sqliteHeader = 'SQLite format 3';
+        if (!header.toString('utf8', 0, 15).startsWith(sqliteHeader.substring(0, 15))) {
+            fs.unlinkSync(uploadedFile.path); // Clean up
+            return res.status(400).json({
+                error: 'Invalid file',
+                message: 'The uploaded file is not a valid SQLite database'
+            });
+        }
+
+        // Close the current database connection
+        db.close();
+
+        // Create backup of current database
+        const backupPath = dbPath + '.backup.' + Date.now();
+        if (fs.existsSync(dbPath)) {
+            fs.copyFileSync(dbPath, backupPath);
+        }
+
+        // Replace with uploaded database
+        fs.copyFileSync(uploadedFile.path, dbPath);
+        fs.unlinkSync(uploadedFile.path); // Clean up uploaded file
+
+        // Trigger server restart to reinitialize database connection
+        res.json({
+            success: true,
+            message: 'Database imported successfully. Please restart the server or reload the page.',
+            backup: backupPath
+        });
+
+        // Trigger restart
+        setTimeout(() => {
+            const serverPath = join(__dirname, '..', 'index.js');
+            const now = new Date();
+            fs.utimesSync(serverPath, now, now);
+            console.log('Server restart triggered after database import.');
+        }, 500);
+
+    } catch (err) {
+        console.error('Import failed:', err);
+        // Clean up uploaded file if it exists
+        if (uploadedFile && fs.existsSync(uploadedFile.path)) {
+            fs.unlinkSync(uploadedFile.path);
+        }
+        res.status(500).json({ error: 'Import failed', message: err.message });
     }
 });
 

@@ -15,6 +15,8 @@ function StockDetail() {
     const [accounts, setAccounts] = useState([]);
     const [price, setPrice] = useState(null);
     const [allPrices, setAllPrices] = useState({}); // For modal
+    const [roles, setRoles] = useState([]); // User-defined roles
+    const [themes, setThemes] = useState([]); // User-defined themes
     const [loading, setLoading] = useState(true);
 
     // Modal State
@@ -29,9 +31,9 @@ function StockDetail() {
     // Research editing state
     const [editingResearch, setEditingResearch] = useState(false);
     const [researchForm, setResearchForm] = useState({
-        theme: '',
-        strategy: '',
-        market_cap: '',
+        theme_id: null,
+        role_id: null,
+        overall_rating: null,
         valuation_rating: null,
         growth_quality_rating: null,
         econ_moat_rating: null,
@@ -45,13 +47,15 @@ function StockDetail() {
 
     async function loadData() {
         try {
-            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData, accountsData] = await Promise.all([
+            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData, accountsData, rolesData, themesData] = await Promise.all([
                 api.getHoldings(),
                 api.getTransactions({ symbol }),
                 api.getDividends({ symbol }),
                 api.fetchPrice(symbol),
                 api.getPrices(),
-                api.getAccounts()
+                api.getAccounts(),
+                api.getRoles(),
+                api.getThemes()
             ]);
 
             // Filter holdings for this symbol
@@ -63,6 +67,8 @@ function StockDetail() {
             setAccounts(accountsData);
             setPrice(priceData);
             setAllPrices(allPricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+            setRoles(rolesData || []);
+            setThemes(themesData || []);
         } catch (err) {
             console.error('Failed to load stock data:', err);
         } finally {
@@ -149,9 +155,9 @@ function StockDetail() {
     // Research editing handlers
     function openResearchEdit() {
         setResearchForm({
-            theme: price?.theme || '',
-            strategy: price?.strategy || '',
-            market_cap: price?.market_cap || '',
+            theme_id: price?.theme_id ?? null,
+            role_id: price?.role_id ?? null,
+            overall_rating: price?.overall_rating ?? null,
             valuation_rating: price?.valuation_rating ?? null,
             growth_quality_rating: price?.growth_quality_rating ?? null,
             econ_moat_rating: price?.econ_moat_rating ?? null,
@@ -242,7 +248,9 @@ function StockDetail() {
     };
 
     const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
+        // Add T00:00:00 to parse as local time, not UTC
+        const date = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
@@ -322,37 +330,33 @@ function StockDetail() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
                         <div>
                             <label className="form-label">Theme</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={researchForm.theme}
-                                onChange={e => setResearchForm({ ...researchForm, theme: e.target.value })}
-                                placeholder="e.g., Tech, Healthcare, Value"
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label">Strategy</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={researchForm.strategy}
-                                onChange={e => setResearchForm({ ...researchForm, strategy: e.target.value })}
-                                placeholder="e.g., Long-term hold, Dividend"
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label">Market Cap</label>
                             <select
                                 className="form-input"
-                                value={researchForm.market_cap}
-                                onChange={e => setResearchForm({ ...researchForm, market_cap: e.target.value })}
+                                value={researchForm.theme_id || ''}
+                                onChange={e => setResearchForm({ ...researchForm, theme_id: e.target.value ? parseInt(e.target.value) : null })}
                             >
                                 <option value="">— Select —</option>
-                                <option value="MEGA">MEGA</option>
-                                <option value="LARGE">LARGE</option>
-                                <option value="MID/SMALL">MID/SMALL</option>
-                                <option value="ETF">ETF</option>
+                                {themes.map(theme => (
+                                    <option key={theme.id} value={theme.id}>{theme.name}</option>
+                                ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="form-label">Role</label>
+                            <select
+                                className="form-input"
+                                value={researchForm.role_id || ''}
+                                onChange={e => setResearchForm({ ...researchForm, role_id: e.target.value ? parseInt(e.target.value) : null })}
+                            >
+                                <option value="">— Select —</option>
+                                {roles.map(role => (
+                                    <option key={role.id} value={role.id}>{role.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="form-label">Overall Rating</label>
+                            <div><StarRating value={researchForm.overall_rating} onChange={v => setResearchForm({ ...researchForm, overall_rating: v })} /></div>
                         </div>
                         <div>
                             <label className="form-label">Valuation</label>
@@ -379,15 +383,15 @@ function StockDetail() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
                         <div>
                             <div className="text-muted" style={{ fontSize: '0.85rem' }}>Theme</div>
-                            <div>{price?.theme || <span className="text-muted">-</span>}</div>
+                            <div>{price?.theme_name || <span className="text-muted">-</span>}</div>
                         </div>
                         <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Strategy</div>
-                            <div>{price?.strategy || <span className="text-muted">-</span>}</div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Role</div>
+                            <div>{price?.role_name || <span className="text-muted">-</span>}</div>
                         </div>
                         <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Market Cap</div>
-                            <div>{price?.market_cap || <span className="text-muted">-</span>}</div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Overall Rating</div>
+                            <StarRating value={price?.overall_rating} readOnly />
                         </div>
                         <div>
                             <div className="text-muted" style={{ fontSize: '0.85rem' }}>Valuation</div>

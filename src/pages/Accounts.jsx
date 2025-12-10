@@ -97,6 +97,7 @@ function Accounts() {
                 </button>
             </div>
 
+
             {accounts.length === 0 ? (
                 <div className="card">
                     <div className="empty-state">
@@ -176,3 +177,4 @@ function Accounts() {
 }
 
 export default Accounts;
+
