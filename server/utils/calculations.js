@@ -6,29 +6,32 @@
  * Cash Balance = (Deposits + Withdrawals + Fees + Interest) + Dividends - Stock Buys + Stock Sells
  * 
  * @param {import('better-sqlite3').Database} db 
- * @param {number} accountId 
+ * @param {number} accountId - If undefined, calculates for all accounts
  * @returns {number}
  */
 export function calculateCashBalance(db, accountId) {
+    const whereClause = accountId ? 'WHERE account_id = ?' : '';
+    const params = accountId ? [accountId] : [];
+
     // Cash movements (deposits, withdrawals, fees, interest)
     const cashMovements = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM cash_movements WHERE account_id = ?'
-    ).get(accountId);
+        `SELECT COALESCE(SUM(amount), 0) as total FROM cash_movements ${whereClause}`
+    ).get(...params);
 
     // Dividends received
     const dividends = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM dividends WHERE account_id = ?'
-    ).get(accountId);
+        `SELECT COALESCE(SUM(amount), 0) as total FROM dividends ${whereClause}`
+    ).get(...params);
 
     // Stock buys (subtract from cash)
     const buys = db.prepare(
-        "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'buy'"
-    ).get(accountId);
+        `SELECT COALESCE(SUM(total), 0) as total FROM transactions ${whereClause ? whereClause + " AND type = 'buy'" : "WHERE type = 'buy'"}`
+    ).get(...params);
 
     // Stock sells (add to cash)
     const sells = db.prepare(
-        "SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE account_id = ? AND type = 'sell'"
-    ).get(accountId);
+        `SELECT COALESCE(SUM(total), 0) as total FROM transactions ${whereClause ? whereClause + " AND type = 'sell'" : "WHERE type = 'sell'"}`
+    ).get(...params);
 
     return (cashMovements?.total || 0) + (dividends?.total || 0) - (buys?.total || 0) + (sells?.total || 0);
 }
@@ -37,16 +40,19 @@ export function calculateCashBalance(db, accountId) {
  * Calculate the total portfolio value (Cash + Holdings Market Value).
  * 
  * @param {import('better-sqlite3').Database} db 
- * @param {number} accountId 
+ * @param {number} accountId - If undefined, calculates for all accounts
  * @returns {number}
  */
 export function calculatePortfolioValue(db, accountId) {
     const cashBalance = calculateCashBalance(db, accountId);
 
     // Calculate value of holdings
+    const whereClause = accountId ? 'WHERE account_id = ?' : '';
+    const params = accountId ? [accountId] : [];
+
     const holdings = db.prepare(
-        'SELECT symbol, SUM(shares) as shares FROM holdings WHERE account_id = ? GROUP BY symbol'
-    ).all(accountId);
+        `SELECT symbol, SUM(shares) as shares FROM holdings ${whereClause} GROUP BY symbol`
+    ).all(...params);
 
     let holdingsValue = 0;
     for (const holding of holdings) {
@@ -57,6 +63,7 @@ export function calculatePortfolioValue(db, accountId) {
 
     return cashBalance + holdingsValue;
 }
+
 
 /**
  * Calculate realized gains for an account.

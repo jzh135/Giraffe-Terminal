@@ -117,6 +117,27 @@ INSERT OR IGNORE INTO app_settings (key, value) VALUES ('app_name', 'Giraffe Ter
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('logo_type', 'default');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('logo_value', '🦒');
 
+-- Performance history cache (daily snapshots per account)
+CREATE TABLE IF NOT EXISTS performance_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  portfolio_value REAL NOT NULL,
+  cost_basis REAL NOT NULL,
+  cash_balance REAL NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(account_id, date)
+);
+
+-- Historical price cache for benchmarks (SPY, etc.)
+CREATE TABLE IF NOT EXISTS price_history (
+  symbol TEXT NOT NULL,
+  date TEXT NOT NULL,
+  close_price REAL NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (symbol, date)
+);
+
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_symbol ON holdings(symbol);
@@ -126,4 +147,6 @@ CREATE INDEX IF NOT EXISTS idx_dividends_account ON dividends(account_id);
 CREATE INDEX IF NOT EXISTS idx_dividends_symbol ON dividends(symbol);
 CREATE INDEX IF NOT EXISTS idx_cash_movements_account ON cash_movements(account_id);
 CREATE INDEX IF NOT EXISTS idx_stock_splits_symbol ON stock_splits(symbol);
+CREATE INDEX IF NOT EXISTS idx_performance_history_account_date ON performance_history(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_price_history_symbol_date ON price_history(symbol, date);
 

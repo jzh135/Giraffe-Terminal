@@ -181,7 +181,22 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-## � Dev Log
+## 📝 Dev Log
+
+- **2025-12-09**: Version **alpha-1.1**
+  - **Performance Chart**: 
+    - Added multi-account performance chart on Dashboard with S&P 500 benchmark comparison.
+    - Timeframe presets: 5D, 30D, 3M, 6M, YTD, 1Y, and Since Inception.
+    - Fetches historical stock prices from Yahoo Finance for accurate portfolio valuation over time.
+    - Auto-generated distinct colors for each account line.
+    - Toggle visibility for individual accounts and S&P 500 line.
+  - **TWR Fix**:
+    - Fixed Time-Weighted Return calculation bug that showed -100%.
+    - Root cause: Portfolio value calculation failed for "All Accounts" view.
+  - **Caching**:
+    - Added `price_history` table to cache historical stock prices.
+    - Added `performance_history` table for portfolio snapshots.
+    - Smart caching: only refetches if data is stale or missing.
 
 - **2025-12-09**: Version **alpha-1**
   - **Core Architecture**:

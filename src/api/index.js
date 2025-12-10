@@ -101,6 +101,14 @@ export const getPerformanceHistory = (accountId) => {
     const params = accountId ? `?account_id=${accountId}` : '';
     return request(`/performance/history${params}`);
 };
+export const getPerformanceChart = (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/performance/chart${query ? `?${query}` : ''}`);
+};
+export const getAllocation = (accountId) => {
+    const params = accountId ? `?account_id=${accountId}` : '';
+    return request(`/performance/allocation${params}`);
+};
 
 // Stock Roles
 export const getRoles = () => request('/roles');
