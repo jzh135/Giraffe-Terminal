@@ -44,5 +44,8 @@ REM If npm run dev exits, pause so user can see any error messages
 if errorlevel 1 (
     echo.
     echo [ERROR] Application failed to start.
-    pause
 )
+
+echo.
+echo Server stopped.
+pause
