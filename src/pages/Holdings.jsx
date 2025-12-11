@@ -15,6 +15,14 @@ function Holdings() {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState('');
     const [splitModalOpen, setSplitModalOpen] = useState(false);
+    const [showSoldStocks, setShowSoldStocks] = useState(() => {
+        return localStorage.getItem('showSoldStocks') === 'true';
+    });
+
+    // Persist showSoldStocks preference
+    useEffect(() => {
+        localStorage.setItem('showSoldStocks', showSoldStocks);
+    }, [showSoldStocks]);
 
     useEffect(() => {
         loadData();
@@ -87,9 +95,18 @@ function Holdings() {
         return result;
     }, [transactions]);
 
+    // Get all unique symbols from transactions (includes sold stocks)
+    const allSymbolsFromTransactions = useMemo(() => {
+        const symbols = new Set();
+        transactions.forEach(t => symbols.add(t.symbol));
+        return symbols;
+    }, [transactions]);
+
     // Build enriched data for sorting
     const enrichedHoldings = useMemo(() => {
         const holdingsBySymbol = {};
+
+        // Add current holdings
         holdings.forEach(h => {
             if (!holdingsBySymbol[h.symbol]) {
                 holdingsBySymbol[h.symbol] = { symbol: h.symbol, lots: [], totalShares: 0, totalCostBasis: 0 };
@@ -98,6 +115,15 @@ function Holdings() {
             holdingsBySymbol[h.symbol].totalShares += h.shares;
             holdingsBySymbol[h.symbol].totalCostBasis += h.cost_basis;
         });
+
+        // Add sold stocks (symbols from transactions that have 0 shares now)
+        if (showSoldStocks) {
+            allSymbolsFromTransactions.forEach(symbol => {
+                if (!holdingsBySymbol[symbol]) {
+                    holdingsBySymbol[symbol] = { symbol, lots: [], totalShares: 0, totalCostBasis: 0, isSold: true };
+                }
+            });
+        }
 
         return Object.values(holdingsBySymbol).map(h => {
             const price = prices[h.symbol]?.price || 0;
@@ -121,7 +147,7 @@ function Holdings() {
                 totalRealized
             };
         });
-    }, [holdings, prices, dividendsBySymbol, realizedGainsBySymbol]);
+    }, [holdings, prices, dividendsBySymbol, realizedGainsBySymbol, showSoldStocks, allSymbolsFromTransactions]);
 
     const { sortedData, sortConfig, requestSort, getSortIndicator } = useSort(enrichedHoldings, { key: 'marketValue', direction: 'desc' });
 
@@ -188,6 +214,15 @@ function Holdings() {
                         <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
                 </select>
+
+                <label className="legend-item" style={{ marginLeft: 'auto' }}>
+                    <input
+                        type="checkbox"
+                        checked={showSoldStocks}
+                        onChange={(e) => setShowSoldStocks(e.target.checked)}
+                    />
+                    <span>Show Sold Stocks</span>
+                </label>
             </div>
 
             {sortedData.length === 0 ? (
@@ -217,20 +252,27 @@ function Holdings() {
                                 <tr
                                     key={row.symbol}
                                     onClick={() => navigate(`/holdings/${row.symbol}`)}
-                                    style={{ cursor: 'pointer' }}
+                                    style={{ cursor: 'pointer', opacity: row.isSold ? 0.6 : 1 }}
                                     className="hover-row"
                                 >
                                     <td>
-                                        <div style={{ fontWeight: 600 }}>{row.symbol}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontWeight: 600 }}>{row.symbol}</span>
+                                            {row.isSold && <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>SOLD</span>}
+                                        </div>
                                         <div className="text-muted" style={{ fontSize: '0.85rem' }}>{row.name}</div>
                                     </td>
                                     <td className="text-right number">{row.totalShares.toLocaleString()}</td>
                                     <td className="text-right number">{formatCurrency(row.price)}</td>
                                     <td className="text-right number" style={{ fontWeight: 600 }}>{formatCurrency(row.marketValue)}</td>
-                                    <td className="text-right number">{formatCurrency(row.avgCost)}</td>
+                                    <td className="text-right number">{row.avgCost > 0 ? formatCurrency(row.avgCost) : '-'}</td>
                                     <td className={`text-right ${row.gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                        <div>{formatCurrency(row.gainLoss)}</div>
-                                        <div style={{ fontSize: '0.85rem' }}>{formatPercent(row.gainLossPercent)}</div>
+                                        {row.isSold ? '-' : (
+                                            <>
+                                                <div>{formatCurrency(row.gainLoss)}</div>
+                                                <div style={{ fontSize: '0.85rem' }}>{formatPercent(row.gainLossPercent)}</div>
+                                            </>
+                                        )}
                                     </td>
                                     <td className={`text-right ${row.totalRealized >= 0 ? (row.totalRealized > 0 ? 'text-positive' : '') : 'text-negative'}`}>
                                         {row.totalRealized !== 0 ? formatCurrency(row.totalRealized) : '-'}

@@ -105,9 +105,47 @@ export const getPerformanceChart = (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(`/performance/chart${query ? `?${query}` : ''}`);
 };
-export const getAllocation = (accountId) => {
-    const params = accountId ? `?account_id=${accountId}` : '';
-    return request(`/performance/allocation${params}`);
+export const getAllocation = (options = {}) => {
+    const params = new URLSearchParams();
+    if (options.accountId) params.append('account_id', options.accountId);
+    if (options.groupBy) params.append('group_by', options.groupBy);
+    const query = params.toString();
+    return request(`/performance/allocation${query ? `?${query}` : ''}`);
+};
+
+// SSE-based recalculate with progress callback
+export const recalculatePerformance = (accountId, onProgress) => {
+    return new Promise((resolve, reject) => {
+        const eventSource = new EventSource(`${API_BASE}/performance/recalculate/${accountId}`);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.error) {
+                    eventSource.close();
+                    reject(new Error(data.error));
+                    return;
+                }
+
+                if (onProgress) {
+                    onProgress(data);
+                }
+
+                if (data.complete) {
+                    eventSource.close();
+                    resolve(data);
+                }
+            } catch (e) {
+                console.error('Failed to parse SSE data:', e);
+            }
+        };
+
+        eventSource.onerror = (err) => {
+            eventSource.close();
+            reject(new Error('Connection lost'));
+        };
+    });
 };
 
 // Stock Roles

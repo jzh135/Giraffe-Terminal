@@ -9,6 +9,8 @@ function Dashboard() {
     const [prices, setPrices] = useState({});
     const [performance, setPerformance] = useState(null);
     const [allocation, setAllocation] = useState([]);
+    const [allocationGroupBy, setAllocationGroupBy] = useState('role');
+    const [allocationExpanded, setAllocationExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState('');
@@ -26,7 +28,11 @@ function Dashboard() {
 
     useEffect(() => {
         loadChartData();
-    }, [chartTimeframe, accounts]);
+    }, [chartTimeframe, accounts.length]);
+
+    useEffect(() => {
+        loadAllocation();
+    }, [allocationGroupBy, selectedAccount]);
 
     async function loadData() {
         try {
@@ -36,7 +42,7 @@ function Dashboard() {
                 api.getHoldings(accountId),
                 api.getPrices(),
                 api.getPerformance(accountId),
-                api.getAllocation(accountId)
+                api.getAllocation({ accountId, groupBy: allocationGroupBy })
             ]);
 
             setAccounts(accountsData);
@@ -48,6 +54,16 @@ function Dashboard() {
             console.error('Failed to load dashboard data:', err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadAllocation() {
+        try {
+            const accountId = selectedAccount || undefined;
+            const allocData = await api.getAllocation({ accountId, groupBy: allocationGroupBy });
+            setAllocation(allocData);
+        } catch (err) {
+            console.error('Failed to load allocation:', err);
         }
     }
 
@@ -84,7 +100,7 @@ function Dashboard() {
             const result = await api.refreshPrices();
             setPrices(result.prices.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
             // Reload allocation as it depends on prices
-            const allocData = await api.getAllocation(selectedAccount || undefined);
+            const allocData = await api.getAllocation({ accountId: selectedAccount || undefined, groupBy: allocationGroupBy });
             setAllocation(allocData);
         } catch (err) {
             console.error('Failed to refresh prices:', err);
@@ -167,6 +183,7 @@ function Dashboard() {
 
     return (
         <div>
+            {/* Header */}
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Portfolio Overview</h1>
@@ -194,6 +211,7 @@ function Dashboard() {
                 </div>
             </div>
 
+            {/* Key Metrics */}
             <div className="stats-grid">
                 <div className="stat-card">
                     <div className="stat-label">Total Portfolio Value</div>
@@ -231,10 +249,10 @@ function Dashboard() {
                 </div>
             </div>
 
-            {/* Performance Chart */}
+            {/* Performance Chart - Full Width */}
             <div className="card mb-lg">
                 <div className="card-header">
-                    <h2 className="card-title">Performance Chart</h2>
+                    <h2 className="card-title">📈 Performance</h2>
                     <div className="chart-controls">
                         <div className="timeframe-selector">
                             {Object.entries(timeframeLabels).map(([key, label]) => (
@@ -251,12 +269,12 @@ function Dashboard() {
                 </div>
 
                 {chartLoading ? (
-                    <div className="loading" style={{ height: 350 }}>
+                    <div className="loading" style={{ height: 320 }}>
                         <div className="spinner"></div>
                     </div>
                 ) : chartData?.data?.length > 0 ? (
                     <>
-                        <div style={{ height: 350 }}>
+                        <div style={{ height: 320 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData.data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
@@ -355,7 +373,7 @@ function Dashboard() {
                         </div>
                     </>
                 ) : (
-                    <div className="empty-state" style={{ height: 350 }}>
+                    <div className="empty-state" style={{ height: 320 }}>
                         <div className="empty-state-icon">📈</div>
                         <div className="empty-state-title">No performance data</div>
                         <p>Add some transactions to see performance over time</p>
@@ -363,112 +381,199 @@ function Dashboard() {
                 )}
             </div>
 
+            {/* Allocation & Holdings Row */}
             <div className="grid grid-cols-2 gap-lg mb-lg">
+                {/* Allocation Chart */}
                 <div className="card">
                     <div className="card-header">
-                        <h2 className="card-title">Allocation by Role</h2>
+                        <h2 className="card-title">🎯 Allocation by {allocationGroupBy === 'role' ? 'Role' : allocationGroupBy === 'theme' ? 'Theme' : 'Stock'}</h2>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <div className="timeframe-selector">
+                                <button
+                                    className={`timeframe-btn ${allocationGroupBy === 'role' ? 'active' : ''}`}
+                                    onClick={() => setAllocationGroupBy('role')}
+                                >
+                                    Role
+                                </button>
+                                <button
+                                    className={`timeframe-btn ${allocationGroupBy === 'theme' ? 'active' : ''}`}
+                                    onClick={() => setAllocationGroupBy('theme')}
+                                >
+                                    Theme
+                                </button>
+                                <button
+                                    className={`timeframe-btn ${allocationGroupBy === 'stock' ? 'active' : ''}`}
+                                    onClick={() => setAllocationGroupBy('stock')}
+                                >
+                                    Stock
+                                </button>
+                            </div>
+                            <button
+                                className="btn btn-icon"
+                                onClick={() => setAllocationExpanded(true)}
+                                title="Expand chart"
+                            >
+                                ⛶
+                            </button>
+                        </div>
                     </div>
-                    <div style={{ height: 300 }}>
+                    <div style={{ height: 280, display: 'flex', gap: '0.5rem' }}>
                         {allocation.length === 0 ? (
-                            <div className="empty-state">
+                            <div className="empty-state" style={{ flex: 1 }}>
                                 <div className="empty-state-icon">📊</div>
                                 <div className="empty-state-title">No allocation data</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={allocation}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={100}
-                                        paddingAngle={2}
-                                    >
-                                        {allocation.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="#1a1a25" />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: '#1a1a25',
-                                            border: '1px solid #2a2a3a',
-                                            borderRadius: '8px'
-                                        }}
-                                        itemStyle={{ color: '#f0f0f5' }}
-                                        formatter={(value, name, props) => [
-                                            `${formatCurrency(value)} (${props.payload.percent.toFixed(1)}%)`,
-                                            name
-                                        ]}
-                                    />
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            <>
+                                <div style={{ flex: 1 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={allocation}
+                                                dataKey="value"
+                                                nameKey="name"
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={50}
+                                                outerRadius={85}
+                                                paddingAngle={2}
+                                                startAngle={90}
+                                                endAngle={-270}
+                                                label={({ name, percent }) =>
+                                                    percent >= 3 ? `${name} ${percent.toFixed(0)}%` : ''
+                                                }
+                                                labelLine={({ percent }) => percent >= 3}
+                                            >
+                                                {allocation.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#1a1a25" />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: '#1a1a25',
+                                                    border: '1px solid #2a2a3a',
+                                                    borderRadius: '8px'
+                                                }}
+                                                itemStyle={{ color: '#f0f0f5' }}
+                                                formatter={(value, name, props) => [
+                                                    `${formatCurrency(value)} (${props.payload.percent.toFixed(1)}%)`,
+                                                    name
+                                                ]}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                {/* Sidebar for small allocations (<3%) */}
+                                {allocation.filter(a => a.percent < 3).length > 0 && (
+                                    <div style={{
+                                        width: '120px',
+                                        maxHeight: 280,
+                                        overflowY: 'auto',
+                                        borderLeft: '1px solid var(--border-color)',
+                                        paddingLeft: '0.5rem',
+                                        fontSize: '0.75rem'
+                                    }}>
+                                        <div style={{
+                                            color: 'var(--text-muted)',
+                                            marginBottom: '0.5rem',
+                                            fontWeight: 500
+                                        }}>
+                                            Other
+                                        </div>
+                                        {allocation
+                                            .filter(a => a.percent < 3)
+                                            .map((item, index) => (
+                                                <div
+                                                    key={index}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.25rem',
+                                                        marginBottom: '0.25rem'
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: '50%',
+                                                        backgroundColor: item.color,
+                                                        flexShrink: 0
+                                                    }} />
+                                                    <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                                                    <span style={{ color: 'var(--text-muted)' }}>{item.percent.toFixed(1)}%</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
 
+                {/* Top Holdings */}
                 <div className="card">
                     <div className="card-header">
-                        <h2 className="card-title">Top Holdings</h2>
-                        <Link to="/holdings" className="btn btn-secondary">View All</Link>
+                        <h2 className="card-title">💼 Top Holdings</h2>
+                        <Link to="/holdings" className="btn btn-secondary btn-sm">View All →</Link>
                     </div>
 
                     {Object.keys(holdingsBySymbol).length === 0 ? (
-                        <div className="empty-state">
+                        <div className="empty-state" style={{ height: 280 }}>
                             <div className="empty-state-icon">📈</div>
                             <div className="empty-state-title">No holdings yet</div>
                             <p>Add stocks to your accounts to track them here</p>
                         </div>
                     ) : (
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th className="text-right">Shares</th>
-                                    <th className="text-right">Price</th>
-                                    <th className="text-right">Value</th>
-                                    <th className="text-right">Gain/Loss</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {Object.entries(holdingsBySymbol)
-                                    .sort((a, b) => {
-                                        const aValue = a[1].shares * (prices[a[0]]?.price || 0);
-                                        const bValue = b[1].shares * (prices[b[0]]?.price || 0);
-                                        return bValue - aValue;
-                                    })
-                                    .slice(0, 5)
-                                    .map(([symbol, data]) => {
-                                        const price = prices[symbol]?.price || 0;
-                                        const marketValue = data.shares * price;
-                                        const gainLoss = marketValue - data.costBasis;
-                                        const gainLossPercent = data.costBasis > 0 ? (gainLoss / data.costBasis) * 100 : 0;
+                        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th className="text-right">Value</th>
+                                        <th className="text-right">Gain/Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.entries(holdingsBySymbol)
+                                        .sort((a, b) => {
+                                            const aValue = a[1].shares * (prices[a[0]]?.price || 0);
+                                            const bValue = b[1].shares * (prices[b[0]]?.price || 0);
+                                            return bValue - aValue;
+                                        })
+                                        .slice(0, 6)
+                                        .map(([symbol, data]) => {
+                                            const price = prices[symbol]?.price || 0;
+                                            const marketValue = data.shares * price;
+                                            const gainLoss = marketValue - data.costBasis;
+                                            const gainLossPercent = data.costBasis > 0 ? (gainLoss / data.costBasis) * 100 : 0;
 
-                                        return (
-                                            <tr key={symbol}>
-                                                <td className="symbol">{symbol}</td>
-                                                <td className="text-right number">{data.shares.toLocaleString()}</td>
-                                                <td className="text-right number">{formatCurrency(price)}</td>
-                                                <td className="text-right number">{formatCurrency(marketValue)}</td>
-                                                <td className={`text-right ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
-                                                    {formatCurrency(gainLoss)} ({formatPercent(gainLossPercent)})
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                            </tbody>
-                        </table>
+                                            return (
+                                                <tr key={symbol}>
+                                                    <td>
+                                                        <Link to={`/holdings/${symbol}`} className="symbol-link">
+                                                            {symbol}
+                                                        </Link>
+                                                    </td>
+                                                    <td className="text-right number">{formatCurrency(marketValue)}</td>
+                                                    <td className={`text-right ${gainLoss >= 0 ? 'text-positive' : 'text-negative'}`}>
+                                                        {formatPercent(gainLossPercent)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             </div>
 
-            <div className="card mb-lg">
+            {/* Accounts Section */}
+            <div className="card">
                 <div className="card-header">
-                    <h2 className="card-title">Accounts</h2>
-                    <Link to="/accounts" className="btn btn-secondary">View All</Link>
+                    <h2 className="card-title">🏦 Accounts</h2>
+                    <Link to="/accounts" className="btn btn-secondary btn-sm">Manage →</Link>
                 </div>
 
                 {accounts.length === 0 ? (
@@ -479,34 +584,174 @@ function Dashboard() {
                         <Link to="/accounts" className="btn btn-primary mt-md">Add Account</Link>
                     </div>
                 ) : (
-                    <div className="account-cards">
+                    <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem 0' }}>
                         {accounts
                             .filter(a => !selectedAccount || a.id.toString() === selectedAccount.toString())
                             .map(account => (
                                 <Link
                                     key={account.id}
                                     to={`/accounts/${account.id}`}
-                                    className="account-card"
-                                    style={{ textDecoration: 'none' }}
+                                    style={{
+                                        textDecoration: 'none',
+                                        minWidth: '200px',
+                                        padding: '1rem',
+                                        background: 'var(--bg-secondary)',
+                                        borderRadius: '8px',
+                                        border: '1px solid var(--border-color)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    className="hover-lift"
                                 >
-                                    <div className="account-header">
-                                        <div>
-                                            <div className="account-name">{account.name}</div>
-                                            <div className="account-type">{account.institution || account.type}</div>
-                                        </div>
-                                        <span className="badge badge-neutral">{account.type}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{account.name}</div>
+                                        <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>{account.type}</span>
                                     </div>
-                                    <div className={`account-cash ${account.cash_balance < 0 ? 'negative' : ''}`}>
-                                        Cash: {formatCurrency(account.cash_balance)}
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                                        {account.institution || 'No institution'}
+                                    </div>
+                                    <div style={{
+                                        fontWeight: 600,
+                                        color: account.cash_balance < 0 ? 'var(--negative)' : 'var(--text-primary)'
+                                    }}>
+                                        {formatCurrency(account.cash_balance)}
                                     </div>
                                 </Link>
                             ))}
                     </div>
                 )}
             </div>
+
+            {/* Expanded Allocation Modal */}
+            {allocationExpanded && (
+                <div className="modal-overlay" onClick={() => setAllocationExpanded(false)}>
+                    <div
+                        className="modal"
+                        style={{ maxWidth: '900px', maxHeight: '90vh' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-header">
+                            <h2 className="modal-title">🎯 Allocation by {allocationGroupBy === 'role' ? 'Role' : allocationGroupBy === 'theme' ? 'Theme' : 'Stock'}</h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <div className="timeframe-selector">
+                                    <button
+                                        className={`timeframe-btn ${allocationGroupBy === 'role' ? 'active' : ''}`}
+                                        onClick={() => setAllocationGroupBy('role')}
+                                    >
+                                        Role
+                                    </button>
+                                    <button
+                                        className={`timeframe-btn ${allocationGroupBy === 'theme' ? 'active' : ''}`}
+                                        onClick={() => setAllocationGroupBy('theme')}
+                                    >
+                                        Theme
+                                    </button>
+                                    <button
+                                        className={`timeframe-btn ${allocationGroupBy === 'stock' ? 'active' : ''}`}
+                                        onClick={() => setAllocationGroupBy('stock')}
+                                    >
+                                        Stock
+                                    </button>
+                                </div>
+                                <button className="modal-close" onClick={() => setAllocationExpanded(false)}>×</button>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1.5rem' }}>
+                            <div style={{ flex: 1, height: 500 }}>
+                                {allocation.length === 0 ? (
+                                    <div className="empty-state">
+                                        <div className="empty-state-icon">📊</div>
+                                        <div className="empty-state-title">No allocation data</div>
+                                    </div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={allocation}
+                                                dataKey="value"
+                                                nameKey="name"
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={80}
+                                                outerRadius={160}
+                                                paddingAngle={1}
+                                                startAngle={90}
+                                                endAngle={-270}
+                                                label={({ name, percent }) =>
+                                                    percent >= 3 ? `${name} ${percent.toFixed(1)}%` : ''
+                                                }
+                                                labelLine={({ percent }) => percent >= 3}
+                                            >
+                                                {allocation.map((entry, index) => (
+                                                    <Cell key={`cell-exp-${index}`} fill={entry.color} stroke="#1a1a25" />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: '#1a1a25',
+                                                    border: '1px solid #2a2a3a',
+                                                    borderRadius: '8px'
+                                                }}
+                                                itemStyle={{ color: '#f0f0f5' }}
+                                                formatter={(value, name, props) => [
+                                                    `${formatCurrency(value)} (${props.payload.percent.toFixed(1)}%)`,
+                                                    name
+                                                ]}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </div>
+                            {/* Sidebar for small allocations (<3%) */}
+                            {allocation.filter(a => a.percent < 3).length > 0 && (
+                                <div style={{
+                                    width: '200px',
+                                    maxHeight: 500,
+                                    overflowY: 'auto',
+                                    borderLeft: '1px solid var(--border-color)',
+                                    paddingLeft: '1rem'
+                                }}>
+                                    <div style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--text-muted)',
+                                        marginBottom: '0.75rem',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Other ({allocation.filter(a => a.percent < 3).length})
+                                    </div>
+                                    {allocation
+                                        .filter(a => a.percent < 3)
+                                        .map((item, index) => (
+                                            <div
+                                                key={index}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    marginBottom: '0.5rem',
+                                                    fontSize: '0.85rem'
+                                                }}
+                                            >
+                                                <div style={{
+                                                    width: 10,
+                                                    height: 10,
+                                                    borderRadius: '50%',
+                                                    backgroundColor: item.color,
+                                                    flexShrink: 0
+                                                }} />
+                                                <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{item.name}</span>
+                                                <span style={{ color: 'var(--text-muted)' }}>{item.percent.toFixed(1)}%</span>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
 export default Dashboard;
-

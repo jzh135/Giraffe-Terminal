@@ -82,21 +82,25 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get portfolio allocation by role
+// Get portfolio allocation by role, theme, or stock
 router.get('/allocation', (req, res) => {
     try {
-        const { account_id } = req.query;
+        const { account_id, group_by = 'role' } = req.query;
 
         let query = `
             SELECT 
                 h.symbol, 
                 h.shares,
                 sp.price,
+                sp.name as stock_name,
                 sr.name as role_name,
-                sr.color as role_color
+                sr.color as role_color,
+                st.name as theme_name,
+                st.color as theme_color
             FROM holdings h
             LEFT JOIN stock_prices sp ON h.symbol = sp.symbol
             LEFT JOIN stock_roles sr ON sp.role_id = sr.id
+            LEFT JOIN stock_themes st ON sp.theme_id = st.id
             WHERE 1=1
         `;
 
@@ -109,25 +113,43 @@ router.get('/allocation', (req, res) => {
 
         const holdings = db.prepare(query).all(...params);
 
-        // Group by role
+        // Generate colors for stocks
+        const stockColors = [
+            '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+            '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#eab308',
+            '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
+            '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7'
+        ];
+
+        // Group by role, theme, or stock
         const allocation = {};
         let totalValue = 0;
 
-        holdings.forEach(h => {
+        holdings.forEach((h, index) => {
             const value = h.shares * (h.price || 0);
             totalValue += value;
 
-            const roleName = h.role_name || 'Unassigned';
-            const roleColor = h.role_color || '#cccccc';
+            let groupName, groupColor;
+            if (group_by === 'theme') {
+                groupName = h.theme_name || 'Unassigned';
+                groupColor = h.theme_color || '#cccccc';
+            } else if (group_by === 'stock') {
+                groupName = h.symbol;
+                // Use stock colors, cycling through if more than available
+                groupColor = stockColors[Object.keys(allocation).length % stockColors.length];
+            } else {
+                groupName = h.role_name || 'Unassigned';
+                groupColor = h.role_color || '#cccccc';
+            }
 
-            if (!allocation[roleName]) {
-                allocation[roleName] = {
-                    name: roleName,
+            if (!allocation[groupName]) {
+                allocation[groupName] = {
+                    name: groupName,
                     value: 0,
-                    color: roleColor
+                    color: group_by === 'stock' ? stockColors[Object.keys(allocation).length % stockColors.length] : groupColor
                 };
             }
-            allocation[roleName].value += value;
+            allocation[groupName].value += value;
         });
 
         // Convert to array and calculate percentages
@@ -161,8 +183,11 @@ router.get('/chart', async (req, res) => {
             return res.json({ data: [], accounts: [], timeframes: Object.keys(TIMEFRAMES) });
         }
 
-        // Calculate date range based on timeframe
+        // Calculate the DISPLAY date range based on timeframe (what we'll show)
         const { startDate, endDate } = getDateRange(timeframe, accounts);
+
+        // Always FETCH with 1Y range to maximize caching (longer range covers shorter ones)
+        const { startDate: fetchStartDate } = getDateRange('1Y', accounts);
 
         // Get all unique symbols held across all accounts
         const allSymbols = db.prepare(`
@@ -170,11 +195,11 @@ router.get('/chart', async (req, res) => {
             WHERE account_id IN (${accounts.map(() => '?').join(',')})
         `).all(...accounts.map(a => a.id)).map(r => r.symbol);
 
-        // Fetch historical prices for all symbols (including SPY)
+        // Fetch historical prices for all symbols (including SPY) with 1Y range
         const symbolsToFetch = [...new Set([...allSymbols, 'SPY'])];
-        const historicalPrices = await fetchHistoricalPricesForSymbols(symbolsToFetch, startDate, endDate);
+        const historicalPrices = await fetchHistoricalPricesForSymbols(symbolsToFetch, fetchStartDate, endDate);
 
-        // Get or calculate performance data for each account
+        // Get or calculate performance data for each account (using display range)
         const accountData = await Promise.all(accounts.map(async (account, index) => {
             const history = await getAccountPerformanceHistoryWithPrices(account.id, startDate, endDate, historicalPrices);
             return {
@@ -185,8 +210,10 @@ router.get('/chart', async (req, res) => {
             };
         }));
 
-        // Get S&P 500 data from the historical prices we already fetched
-        const spyData = (historicalPrices.get('SPY') || []).map(p => ({ date: p.date, close_price: p.price }));
+        // Get S&P 500 data from the historical prices, filtered to display range
+        const spyData = (historicalPrices.get('SPY') || [])
+            .filter(p => p.date >= startDate && p.date <= endDate)
+            .map(p => ({ date: p.date, close_price: p.price }));
 
         // Normalize all data to percentage returns from the start
         const normalizedData = normalizeReturns(accountData, spyData, startDate, endDate);
@@ -208,6 +235,177 @@ router.get('/chart', async (req, res) => {
     }
 });
 
+// Recalculate performance history for an account (with SSE progress)
+router.get('/recalculate/:accountId', async (req, res) => {
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendProgress = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+        const { accountId } = req.params;
+        const startTime = Date.now();
+
+        // Verify account exists
+        const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId);
+        if (!account) {
+            sendProgress({ error: 'Account not found' });
+            res.end();
+            return;
+        }
+
+        sendProgress({ status: 'Deleting old records...', percent: 0 });
+
+        // Delete existing performance history for this account
+        const deleteResult = db.prepare('DELETE FROM performance_history WHERE account_id = ?').run(accountId);
+        console.log(`Deleted ${deleteResult.changes} old performance history records for account ${accountId}`);
+
+        // Get date range - from first transaction/cash movement to today
+        const firstActivity = db.prepare(`
+            SELECT MIN(date) as earliest FROM (
+                SELECT date FROM transactions WHERE account_id = ?
+                UNION ALL
+                SELECT date FROM cash_movements WHERE account_id = ?
+            )
+        `).get(accountId, accountId);
+
+        if (!firstActivity?.earliest) {
+            sendProgress({ complete: true, message: 'No activity found for this account', regenerated: 0 });
+            res.end();
+            return;
+        }
+
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const startDate = firstActivity.earliest;
+
+        sendProgress({ status: 'Fetching historical prices...', percent: 5 });
+
+        // Get all symbols for this account
+        const symbols = db.prepare(`
+            SELECT DISTINCT symbol FROM transactions WHERE account_id = ?
+        `).all(accountId).map(r => r.symbol);
+
+        // Fetch historical prices (will use cache)
+        const historicalPrices = await fetchHistoricalPricesForSymbols(symbols, startDate, today);
+
+        // Generate all workdays
+        const allDates = generateWorkdays(startDate, today).filter(d => d !== today);
+        const totalDates = allDates.length;
+
+        sendProgress({ status: 'Calculating snapshots...', percent: 10, total: totalDates });
+
+        let regenerated = 0;
+        for (let i = 0; i < allDates.length; i++) {
+            const date = allDates[i];
+
+            // Calculate snapshot for this date
+            const holdings = db.prepare(`
+                SELECT symbol, 
+                       SUM(CASE WHEN type = 'buy' AND date <= ? THEN shares ELSE 0 END) -
+                       SUM(CASE WHEN type = 'sell' AND date <= ? THEN shares ELSE 0 END) as shares,
+                       SUM(CASE WHEN type = 'buy' AND date <= ? THEN total ELSE 0 END) as cost_basis
+                FROM transactions
+                WHERE account_id = ? AND date <= ?
+                GROUP BY symbol
+                HAVING shares > 0
+            `).all(date, date, date, accountId, date);
+
+            const cashMovements = db.prepare(`
+                SELECT COALESCE(SUM(amount), 0) as total 
+                FROM cash_movements 
+                WHERE account_id = ? AND date <= ?
+            `).get(accountId, date);
+
+            const dividends = db.prepare(`
+                SELECT COALESCE(SUM(amount), 0) as total 
+                FROM dividends 
+                WHERE account_id = ? AND date <= ?
+            `).get(accountId, date);
+
+            const buys = db.prepare(`
+                SELECT COALESCE(SUM(total), 0) as total 
+                FROM transactions 
+                WHERE account_id = ? AND type = 'buy' AND date <= ?
+            `).get(accountId, date);
+
+            const sells = db.prepare(`
+                SELECT COALESCE(SUM(total), 0) as total 
+                FROM transactions 
+                WHERE account_id = ? AND type = 'sell' AND date <= ?
+            `).get(accountId, date);
+
+            const cashBalance = (cashMovements?.total || 0) + (dividends?.total || 0) - (buys?.total || 0) + (sells?.total || 0);
+
+            // Calculate holdings value using historical prices
+            let holdingsValue = 0;
+            let totalCostBasis = 0;
+            for (const h of holdings) {
+                const symbolPrices = historicalPrices.get(h.symbol) || [];
+                let price = null;
+                for (let j = symbolPrices.length - 1; j >= 0; j--) {
+                    if (symbolPrices[j].date <= date) {
+                        price = symbolPrices[j].price;
+                        break;
+                    }
+                }
+                if (price === null) {
+                    const currentPrice = db.prepare('SELECT price FROM stock_prices WHERE symbol = ?').get(h.symbol);
+                    price = currentPrice?.price || 0;
+                }
+                holdingsValue += h.shares * price;
+                totalCostBasis += h.cost_basis || 0;
+            }
+
+            const portfolioValue = cashBalance + holdingsValue;
+
+            // Only save if there's meaningful data
+            if (portfolioValue > 0 || totalCostBasis > 0) {
+                db.prepare(`
+                    INSERT OR REPLACE INTO performance_history 
+                    (account_id, date, portfolio_value, cost_basis, cash_balance)
+                    VALUES (?, ?, ?, ?, ?)
+                `).run(accountId, date, portfolioValue, totalCostBasis, cashBalance);
+                regenerated++;
+            }
+
+            // Send progress update every 10 dates or at the end
+            if (i % 10 === 0 || i === allDates.length - 1) {
+                const percent = Math.round(10 + (i / totalDates) * 88); // 10% to 98%
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                sendProgress({
+                    status: `Processing ${date}...`,
+                    percent,
+                    current: i + 1,
+                    total: totalDates,
+                    elapsed: `${elapsed}s`,
+                    regenerated
+                });
+            }
+        }
+
+        const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`Regenerated ${regenerated} performance history records for account ${accountId} in ${totalElapsed}s`);
+
+        sendProgress({
+            complete: true,
+            message: 'Performance history recalculated',
+            regenerated,
+            elapsed: `${totalElapsed}s`,
+            percent: 100
+        });
+        res.end();
+    } catch (err) {
+        console.error('Recalculate error:', err);
+        sendProgress({ error: err.message });
+        res.end();
+    }
+});
 
 // Get portfolio value over time for charting (legacy endpoint)
 router.get('/history', async (req, res) => {
@@ -605,12 +803,15 @@ async function fetchSPYPerformance(startDate, endDate) {
 }
 
 // Helper: Fetch historical prices for multiple symbols from Yahoo Finance
+// Uses incremental fetching - only fetches missing dates, not the full history
 async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
     const pricesMap = new Map();
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    // Check cache first
+    // Use LOCAL date, not UTC (toISOString converts to UTC which can be "tomorrow" in evening)
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    // Get cached data for all symbols first
     for (const symbol of symbols) {
         const cached = db.prepare(`
             SELECT date, close_price as price
@@ -624,33 +825,51 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
         }
     }
 
-    // Calculate expected number of workdays in the range
-    const expectedDays = generateWorkdays(startDate, endDate).length;
+    // Determine which symbols need fetching and from what date
+    // We only fetch NEW data (from last cached date to today), not the full history
+    const symbolsToFetch = [];
 
-    // Determine which symbols need fetching:
-    // 1. No cached data at all
-    // 2. Cached data is missing more than 20% of expected days
-    // 3. We don't have data for yesterday or today (need fresh data)
-    const symbolsToFetch = symbols.filter(s => {
-        const cached = pricesMap.get(s);
-        if (!cached || cached.length === 0) return true;
+    for (const symbol of symbols) {
+        const cached = pricesMap.get(symbol);
 
-        // Check if we're missing too much data
-        if (cached.length < expectedDays * 0.8) return true;
+        if (!cached || cached.length === 0) {
+            // No cached data at all - need full fetch
+            symbolsToFetch.push({ symbol, fetchFrom: startDate, fullFetch: true });
+        } else {
+            // Check if we need to fetch newer data
+            const mostRecentCachedDate = cached[cached.length - 1]?.date;
 
-        // Check if we have recent data (within last 2 days)
-        const mostRecentDate = cached[cached.length - 1]?.date;
-        if (!mostRecentDate) return true;
-        if (mostRecentDate < yesterday) return true;
+            if (mostRecentCachedDate && mostRecentCachedDate < today) {
+                // Only fetch from the day after the last cached date
+                // Parse the date properly to avoid timezone issues
+                const [year, month, day] = mostRecentCachedDate.split('-').map(Number);
+                const nextDay = new Date(year, month - 1, day + 1);
+                const fetchFromDate = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
 
-        return false;
-    });
+                // Only add to fetch list if there could be new data
+                if (fetchFromDate <= today) {
+                    symbolsToFetch.push({ symbol, fetchFrom: fetchFromDate, fullFetch: false });
+                }
+            }
+            // If mostRecentCachedDate >= today, we already have all data - no fetch needed
+        }
+    }
 
-    console.log(`Fetching historical prices for ${symbolsToFetch.length} symbols from Yahoo Finance...`);
+    if (symbolsToFetch.length > 0) {
+        const fullFetches = symbolsToFetch.filter(s => s.fullFetch).length;
+        const incrementalFetches = symbolsToFetch.length - fullFetches;
 
-    for (const symbol of symbolsToFetch) {
+        if (fullFetches > 0) {
+            console.log(`Fetching full history for ${fullFetches} new symbols...`);
+        }
+        if (incrementalFetches > 0) {
+            console.log(`Fetching recent prices for ${incrementalFetches} symbols...`);
+        }
+    }
+
+    for (const { symbol, fetchFrom, fullFetch } of symbolsToFetch) {
         try {
-            const start = new Date(startDate);
+            const start = new Date(fetchFrom);
             const end = new Date(endDate);
             const period1 = Math.floor(start.getTime() / 1000);
             const period2 = Math.floor(end.getTime() / 1000) + 86400;
@@ -670,26 +889,39 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
                 const timestamps = result.timestamp || [];
                 const closes = result.indicators?.quote?.[0]?.close || [];
 
-                const history = [];
+                let newPoints = 0;
                 for (let i = 0; i < timestamps.length; i++) {
                     if (closes[i] !== null && closes[i] !== undefined) {
                         const date = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
-                        history.push({ date, price: closes[i] });
 
-                        // Cache the data
+                        // Cache the new data point
                         try {
                             db.prepare(`
                                 INSERT OR REPLACE INTO price_history (symbol, date, close_price)
                                 VALUES (?, ?, ?)
                             `).run(symbol, date, closes[i]);
+                            newPoints++;
                         } catch (e) {
                             // Ignore cache errors
                         }
                     }
                 }
 
-                pricesMap.set(symbol, history);
-                console.log(`Cached ${history.length} price points for ${symbol}`);
+                // Reload the full cached data for this symbol
+                const updatedCache = db.prepare(`
+                    SELECT date, close_price as price
+                    FROM price_history
+                    WHERE symbol = ? AND date >= ? AND date <= ?
+                    ORDER BY date
+                `).all(symbol, startDate, endDate);
+
+                pricesMap.set(symbol, updatedCache);
+
+                if (fullFetch) {
+                    console.log(`Cached ${updatedCache.length} price points for ${symbol}`);
+                } else if (newPoints > 0) {
+                    console.log(`Added ${newPoints} new price points for ${symbol}`);
+                }
             }
         } catch (err) {
             console.error(`Failed to fetch ${symbol}:`, err.message);

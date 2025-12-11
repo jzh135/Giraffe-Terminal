@@ -932,3 +932,38 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Hover lift effect for interactive elements */
+.hover-lift {
+  transition: all var(--transition-fast);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-primary) !important;
+}
+
+/* Small button variant */
+.btn-sm {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+}
+
+/* Symbol link in tables */
+.symbol-link {
+  color: var(--accent-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color var(--transition-fast);
+}
+
+.symbol-link:hover {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+/* Negative color variable */
+:root {
+  --negative: var(--danger);
+}

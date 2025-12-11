@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
     getAccount, getHoldings, getPrices, getTransactions, getCashMovements, getDividends,
     createHolding, sellStock, createCashMovement, createDividend, deleteHolding,
-    updateTransaction, updateCashMovement, updateDividend, deleteTransaction, deleteCashMovement, deleteDividend
+    updateTransaction, updateCashMovement, updateDividend, deleteTransaction, deleteCashMovement, deleteDividend,
+    recalculatePerformance
 } from '../api';
 import TradeModal from '../components/modals/TradeModal';
 import CashMovementModal from '../components/modals/CashMovementModal';
@@ -36,6 +37,9 @@ function AccountDetail() {
     // Edit states
     const [editTransaction, setEditTransaction] = useState(null);
     const [editCash, setEditCash] = useState(null);
+
+    // Recalculate state
+    const [recalculating, setRecalculating] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -152,6 +156,27 @@ function AccountDetail() {
         setSelectedHolding(holding);
         setTradeTab('sell');
         setTradeModalOpen(true);
+    }
+
+    async function handleRecalculatePerformance() {
+        if (recalculating) return;
+        setRecalculating({ status: 'Starting...', percent: 0 });
+        try {
+            const result = await recalculatePerformance(id, (progress) => {
+                setRecalculating({
+                    status: progress.status || 'Processing...',
+                    percent: progress.percent || 0,
+                    current: progress.current,
+                    total: progress.total,
+                    elapsed: progress.elapsed
+                });
+            });
+            alert(`Performance history recalculated! ${result.regenerated} records regenerated in ${result.elapsed}.`);
+        } catch (err) {
+            alert('Failed to recalculate: ' + err.message);
+        } finally {
+            setRecalculating(false);
+        }
     }
 
     // Cash Activity - safe arrays
@@ -336,6 +361,21 @@ function AccountDetail() {
                         setCashModalOpen(true);
                     }}>
                         Cash Movement
+                    </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleRecalculatePerformance}
+                        disabled={recalculating}
+                        title="Regenerate historical performance data for this account"
+                        style={recalculating ? { minWidth: '280px' } : {}}
+                    >
+                        {recalculating ? (
+                            <>
+                                ⏳ {recalculating.percent}%
+                                {recalculating.current && recalculating.total && ` (${recalculating.current}/${recalculating.total})`}
+                                {recalculating.elapsed && ` • ${recalculating.elapsed}`}
+                            </>
+                        ) : '📊 Recalculate History'}
                     </button>
                 </div>
             </div>

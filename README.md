@@ -183,6 +183,24 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-10**: Version **alpha-1.2**
+  - **Dashboard Overhaul**:
+    - Reorganized layout: Logical grouping of Performance, Allocation, Top Holdings, and Accounts.
+    - **Visual Enhancements**: Added icons, hover effects (`hover-lift`), and compact card designs.
+    - **Allocation Chart**: 
+        - Added **Stock** grouping (alongside Role/Theme).
+        - Added **Expand Mode**: Full-screen modal for detailed chart analysis.
+        - **Smart Labels**: Inline labels for items ≥3%, sidebar legend for items <3%.
+        - Clockwise ordering starting from 12 o'clock.
+  - **Holdings Management**:
+    - Added **"Show Sold Stocks"** toggle to view fully realized positions.
+    - Visual indicators (badge, opacity) for sold positions.
+    - Persists view preference across sessions.
+  - **System**:
+    - **Optimized Caching**: Incremental fetching for historical prices (only fetches missing days).
+    - **Recalculate Tool**: Added manual "Recalculate History" button with real-time SSE progress streaming.
+    - **UX**: Improved responsiveness and added consistent styling (buttons, badges).
+
 - **2025-12-09**: Version **alpha-1.1**
   - **Performance Chart**: 
     - Added multi-account performance chart on Dashboard with S&P 500 benchmark comparison.
