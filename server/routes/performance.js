@@ -186,8 +186,10 @@ router.get('/chart', async (req, res) => {
         // Calculate the DISPLAY date range based on timeframe (what we'll show)
         const { startDate, endDate } = getDateRange(timeframe, accounts);
 
-        // Always FETCH with 1Y range to maximize caching (longer range covers shorter ones)
-        const { startDate: fetchStartDate } = getDateRange('1Y', accounts);
+        // Fetch with the MAX of 1Y or oldest account date to ensure full coverage
+        const { startDate: oneYearStartDate } = getDateRange('1Y', accounts);
+        const { startDate: allTimeStartDate } = getDateRange('ALL', accounts);
+        const fetchStartDate = allTimeStartDate < oneYearStartDate ? allTimeStartDate : oneYearStartDate;
 
         // Get all unique symbols held across all accounts
         const allSymbols = db.prepare(`
@@ -195,7 +197,7 @@ router.get('/chart', async (req, res) => {
             WHERE account_id IN (${accounts.map(() => '?').join(',')})
         `).all(...accounts.map(a => a.id)).map(r => r.symbol);
 
-        // Fetch historical prices for all symbols (including SPY) with 1Y range
+        // Fetch historical prices for all symbols (including SPY) with extended range
         const symbolsToFetch = [...new Set([...allSymbols, 'SPY'])];
         const historicalPrices = await fetchHistoricalPricesForSymbols(symbolsToFetch, fetchStartDate, endDate);
 

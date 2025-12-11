@@ -125,6 +125,11 @@ function Dashboard() {
         return sum + (a.cash_balance || 0);
     }, 0);
 
+    const totalRealizedGain = accounts.reduce((sum, a) => {
+        if (selectedAccount && a.id.toString() !== selectedAccount.toString()) return sum;
+        return sum + (a.realized_gain || 0);
+    }, 0);
+
     const holdingsBySymbol = holdings.reduce((acc, h) => {
         if (!acc[h.symbol]) {
             acc[h.symbol] = { shares: 0, costBasis: 0 };
@@ -140,8 +145,9 @@ function Dashboard() {
     }, 0);
 
     const totalCostBasis = Object.values(holdingsBySymbol).reduce((sum, data) => sum + data.costBasis, 0);
-    const totalGainLoss = totalMarketValue - totalCostBasis;
+    const totalGainLoss = totalMarketValue - totalCostBasis; // Unrealized
     const totalGainLossPercent = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0;
+    const totalGains = totalGainLoss + totalRealizedGain; // Total = Unrealized + Realized
 
     const portfolioValue = totalMarketValue + totalCash;
 
@@ -227,13 +233,13 @@ function Dashboard() {
                 </div>
 
                 <div className="stat-card">
-                    <div className="stat-label">Cash Balance</div>
-                    <div className={`stat-value ${totalCash < 0 ? 'negative' : ''}`}>
-                        {formatCurrency(totalCash)}
+                    <div className="stat-label">Total Gains</div>
+                    <div className={`stat-value ${totalGains >= 0 ? 'positive' : 'negative'}`}>
+                        {formatCurrency(totalGains)}
                     </div>
-                    {totalCash < 0 && (
-                        <div className="stat-change negative">Margin Used</div>
-                    )}
+                    <div className="stat-change" style={{ color: 'var(--text-muted)' }}>
+                        Unrealized: {formatCurrency(totalGainLoss)} | Realized: {formatCurrency(totalRealizedGain)}
+                    </div>
                 </div>
 
                 <div className="stat-card">
