@@ -2,6 +2,80 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 
+const MAX_NOTES_LENGTH = 1000;
+
+// StarRating component - defined outside to prevent re-creation
+const StarRating = ({ value, onChange }) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+        const filled = value >= i;
+        const halfFilled = value >= i - 0.5 && value < i;
+        stars.push(
+            <span
+                key={i}
+                onClick={() => onChange && onChange(value === i ? i - 0.5 : (value === i - 0.5 ? null : i))}
+                style={{
+                    cursor: 'pointer',
+                    fontSize: '1.5rem',
+                    color: filled || halfFilled ? '#f59e0b' : '#d1d5db',
+                    transition: 'transform 0.1s ease'
+                }}
+                title={`Click for ${i} stars`}
+                onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
+                onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+            >
+                {filled ? '★' : (halfFilled ? '⯨' : '☆')}
+            </span>
+        );
+    }
+    return <span style={{ display: 'inline-flex', gap: '4px' }}>{stars}</span>;
+};
+
+// Rating Card Component - defined outside to prevent re-creation
+const RatingCard = ({ title, ratingKey, notesKey, icon, form, setForm }) => (
+    <div className="card" style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '1.5rem' }}>{icon}</span>
+            <h3 style={{ margin: 0 }}>{title}</h3>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+            <label className="form-label">Rating</label>
+            <div style={{ padding: '8px 0' }}>
+                <StarRating
+                    value={form[ratingKey]}
+                    onChange={v => setForm(prev => ({ ...prev, [ratingKey]: v }))}
+                />
+                <span style={{ marginLeft: '12px', color: '#9ca3af', fontSize: '0.9rem' }}>
+                    {form[ratingKey] ? `${form[ratingKey]} / 5` : 'Not rated'}
+                </span>
+            </div>
+        </div>
+
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label">Notes</label>
+                <span style={{
+                    fontSize: '0.8rem',
+                    color: (form[notesKey]?.length || 0) > MAX_NOTES_LENGTH * 0.9 ? '#f59e0b' : '#6b7280',
+                    fontWeight: (form[notesKey]?.length || 0) >= MAX_NOTES_LENGTH ? 'bold' : 'normal'
+                }}>
+                    {MAX_NOTES_LENGTH - (form[notesKey]?.length || 0)} characters remaining
+                </span>
+            </div>
+            <textarea
+                className="form-input"
+                value={form[notesKey]}
+                onChange={e => setForm(prev => ({ ...prev, [notesKey]: e.target.value }))}
+                placeholder={`Add your ${title.toLowerCase()} analysis notes here...`}
+                rows={4}
+                maxLength={MAX_NOTES_LENGTH}
+                style={{ resize: 'vertical', minHeight: '100px' }}
+            />
+        </div>
+    </div>
+);
+
 function Research() {
     const { symbol } = useParams();
     const navigate = useNavigate();
@@ -139,68 +213,6 @@ function Research() {
         URL.revokeObjectURL(url);
     }
 
-    // StarRating component
-    const StarRating = ({ value, onChange }) => {
-        const stars = [];
-        for (let i = 1; i <= 5; i++) {
-            const filled = value >= i;
-            const halfFilled = value >= i - 0.5 && value < i;
-            stars.push(
-                <span
-                    key={i}
-                    onClick={() => onChange && onChange(value === i ? i - 0.5 : (value === i - 0.5 ? null : i))}
-                    style={{
-                        cursor: 'pointer',
-                        fontSize: '1.5rem',
-                        color: filled || halfFilled ? '#f59e0b' : '#d1d5db',
-                        transition: 'transform 0.1s ease'
-                    }}
-                    title={`Click for ${i} stars`}
-                    onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
-                    onMouseLeave={e => e.target.style.transform = 'scale(1)'}
-                >
-                    {filled ? '★' : (halfFilled ? '⯨' : '☆')}
-                </span>
-            );
-        }
-        return <span style={{ display: 'inline-flex', gap: '4px' }}>{stars}</span>;
-    };
-
-    // Rating Card Component
-    const RatingCard = ({ title, ratingKey, notesKey, icon }) => (
-        <div className="card" style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-                <h3 style={{ margin: 0 }}>{title}</h3>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-                <label className="form-label">Rating</label>
-                <div style={{ padding: '8px 0' }}>
-                    <StarRating
-                        value={form[ratingKey]}
-                        onChange={v => setForm({ ...form, [ratingKey]: v })}
-                    />
-                    <span style={{ marginLeft: '12px', color: '#9ca3af', fontSize: '0.9rem' }}>
-                        {form[ratingKey] ? `${form[ratingKey]} / 5` : 'Not rated'}
-                    </span>
-                </div>
-            </div>
-
-            <div>
-                <label className="form-label">Notes</label>
-                <textarea
-                    className="form-input"
-                    value={form[notesKey]}
-                    onChange={e => setForm({ ...form, [notesKey]: e.target.value })}
-                    placeholder={`Add your ${title.toLowerCase()} analysis notes here...`}
-                    rows={4}
-                    style={{ resize: 'vertical', minHeight: '100px' }}
-                />
-            </div>
-        </div>
-    );
-
     if (loading) {
         return (
             <div className="loading">
@@ -245,7 +257,7 @@ function Research() {
                         <select
                             className="form-input"
                             value={form.theme_id || ''}
-                            onChange={e => setForm({ ...form, theme_id: e.target.value ? parseInt(e.target.value) : null })}
+                            onChange={e => setForm(prev => ({ ...prev, theme_id: e.target.value ? parseInt(e.target.value) : null }))}
                         >
                             <option value="">— Select Theme —</option>
                             {themes.map(theme => (
@@ -258,7 +270,7 @@ function Research() {
                         <select
                             className="form-input"
                             value={form.role_id || ''}
-                            onChange={e => setForm({ ...form, role_id: e.target.value ? parseInt(e.target.value) : null })}
+                            onChange={e => setForm(prev => ({ ...prev, role_id: e.target.value ? parseInt(e.target.value) : null }))}
                         >
                             <option value="">— Select Role —</option>
                             {roles.map(role => (
@@ -283,7 +295,7 @@ function Research() {
                     <div style={{ padding: '8px 0' }}>
                         <StarRating
                             value={form.overall_rating}
-                            onChange={v => setForm({ ...form, overall_rating: v })}
+                            onChange={v => setForm(prev => ({ ...prev, overall_rating: v }))}
                         />
                         <span style={{ marginLeft: '12px', color: '#9ca3af', fontSize: '0.9rem' }}>
                             {form.overall_rating ? `${form.overall_rating} / 5` : 'Not rated'}
@@ -292,13 +304,23 @@ function Research() {
                 </div>
 
                 <div>
-                    <label className="form-label">Investment Thesis</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label className="form-label">Investment Thesis</label>
+                        <span style={{
+                            fontSize: '0.8rem',
+                            color: (form.overall_notes?.length || 0) > MAX_NOTES_LENGTH * 0.9 ? '#f59e0b' : '#6b7280',
+                            fontWeight: (form.overall_notes?.length || 0) >= MAX_NOTES_LENGTH ? 'bold' : 'normal'
+                        }}>
+                            {MAX_NOTES_LENGTH - (form.overall_notes?.length || 0)} characters remaining
+                        </span>
+                    </div>
                     <textarea
                         className="form-input"
                         value={form.overall_notes}
-                        onChange={e => setForm({ ...form, overall_notes: e.target.value })}
+                        onChange={e => setForm(prev => ({ ...prev, overall_notes: e.target.value }))}
                         placeholder="Summarize your investment thesis and key reasons for holding this stock..."
                         rows={5}
+                        maxLength={MAX_NOTES_LENGTH}
                         style={{ resize: 'vertical', minHeight: '120px' }}
                     />
                 </div>
@@ -312,30 +334,40 @@ function Research() {
                     ratingKey="valuation_rating"
                     notesKey="valuation_notes"
                     icon="💰"
+                    form={form}
+                    setForm={setForm}
                 />
                 <RatingCard
                     title="Growth Quality"
                     ratingKey="growth_quality_rating"
                     notesKey="growth_quality_notes"
                     icon="📈"
+                    form={form}
+                    setForm={setForm}
                 />
                 <RatingCard
                     title="Economic Moat"
                     ratingKey="econ_moat_rating"
                     notesKey="econ_moat_notes"
                     icon="🏰"
+                    form={form}
+                    setForm={setForm}
                 />
                 <RatingCard
                     title="Leadership"
                     ratingKey="leadership_rating"
                     notesKey="leadership_notes"
                     icon="👔"
+                    form={form}
+                    setForm={setForm}
                 />
                 <RatingCard
                     title="Financial Health"
                     ratingKey="financial_health_rating"
                     notesKey="financial_health_notes"
                     icon="🏥"
+                    form={form}
+                    setForm={setForm}
                 />
             </div>
 

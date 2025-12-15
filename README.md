@@ -183,6 +183,20 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-15**: Version **alpha-1.4**
+  - **Research Panel Improvements**:
+    - Increased character limit to **1000 characters** per notes block (was previously unlimited but now enforced).
+    - Added **character countdown** indicators showing remaining characters for each notes field.
+    - Countdown turns **amber** when under 100 characters remain and **bold** at limit.
+  - **Stock Detail Page**:
+    - Research panel is now **expandable** with a toggle button.
+    - When expanded, shows **all notes** for every rating category (Investment Thesis, Valuation, Growth Quality, Economic Moat, Leadership, Financial Health).
+    - Collapsed view shows ratings only; expanded view shows full notes content.
+  - **Bug Fixes**:
+    - Fixed **stale closure bug** that prevented typing in multiple notes fields.
+    - Fixed **focus loss** issue where textareas would lose focus after each keystroke.
+    - Refactored `StarRating` and `RatingCard` components to be stable across re-renders.
+
 - **2025-12-14**: Version **alpha-1.3**
   - **Research Page**:
     - Added dedicated Research page (`/holdings/:symbol/research`) for in-depth stock analysis.

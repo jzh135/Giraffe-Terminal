@@ -26,6 +26,9 @@ function StockDetail() {
     const [editTransaction, setEditTransaction] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+    // Research panel expansion
+    const [researchExpanded, setResearchExpanded] = useState(false);
+
     useEffect(() => {
         loadData();
     }, [symbol]);
@@ -271,7 +274,6 @@ function StockDetail() {
             {/* Research Section - Clickable to go to dedicated page */}
             <div
                 className="card mb-lg"
-                onClick={() => navigate(`/holdings/${symbol}/research`)}
                 style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
                 onMouseEnter={e => {
                     e.currentTarget.style.borderColor = '#6366f1';
@@ -282,14 +284,20 @@ function StockDetail() {
                     e.currentTarget.style.boxShadow = '';
                 }}
             >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}
+                    onClick={() => navigate(`/holdings/${symbol}/research`)}
+                >
                     <h3 style={{ margin: 0 }}>📊 Research</h3>
                     <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
                         View & Edit →
                     </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                <div
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}
+                    onClick={() => navigate(`/holdings/${symbol}/research`)}
+                >
                     <div>
                         <div className="text-muted" style={{ fontSize: '0.85rem' }}>Theme</div>
                         <div>{price?.theme_name || <span className="text-muted">-</span>}</div>
@@ -324,15 +332,105 @@ function StockDetail() {
                     </div>
                 </div>
 
-                {price?.overall_notes && (
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                        <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>Investment Thesis</div>
-                        <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
-                            {price.overall_notes.length > 200
-                                ? price.overall_notes.substring(0, 200) + '...'
-                                : price.overall_notes
-                            }
-                        </div>
+                {/* Expand/Collapse Button */}
+                <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '12px' }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setResearchExpanded(!researchExpanded);
+                        }}
+                        style={{ width: '100%' }}
+                    >
+                        {researchExpanded ? '▲ Collapse Notes' : '▼ Expand Notes'}
+                    </button>
+                </div>
+
+                {/* Expanded Notes Section */}
+                {researchExpanded && (
+                    <div
+                        style={{ marginTop: '16px' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Investment Thesis */}
+                        {price?.overall_notes && (
+                            <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    ⭐ Investment Thesis
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#e5e7eb', whiteSpace: 'pre-wrap' }}>
+                                    {price.overall_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Valuation Notes */}
+                        {price?.valuation_notes && (
+                            <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    💰 Valuation Notes
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                                    {price.valuation_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Growth Quality Notes */}
+                        {price?.growth_quality_notes && (
+                            <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    📈 Growth Quality Notes
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                                    {price.growth_quality_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Economic Moat Notes */}
+                        {price?.econ_moat_notes && (
+                            <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    🏰 Economic Moat Notes
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                                    {price.econ_moat_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Leadership Notes */}
+                        {price?.leadership_notes && (
+                            <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    👔 Leadership Notes
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                                    {price.leadership_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Financial Health Notes */}
+                        {price?.financial_health_notes && (
+                            <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    🏥 Financial Health Notes
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                                    {price.financial_health_notes}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* No notes message */}
+                        {!price?.overall_notes && !price?.valuation_notes && !price?.growth_quality_notes &&
+                            !price?.econ_moat_notes && !price?.leadership_notes && !price?.financial_health_notes && (
+                                <div className="text-muted" style={{ textAlign: 'center', padding: '16px', fontSize: '0.9rem' }}>
+                                    No research notes added yet. Click "View & Edit" to add notes.
+                                </div>
+                            )}
                     </div>
                 )}
             </div>
