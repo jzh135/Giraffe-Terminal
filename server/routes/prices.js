@@ -105,7 +105,13 @@ router.get('/fetch/:symbol', async (req, res) => {
 router.put('/:symbol', (req, res) => {
     try {
         const symbol = req.params.symbol.toUpperCase();
-        const { theme_id, role_id, overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating } = req.body;
+        const {
+            theme_id, role_id,
+            overall_rating, valuation_rating, growth_quality_rating,
+            econ_moat_rating, leadership_rating, financial_health_rating,
+            overall_notes, valuation_notes, growth_quality_notes,
+            econ_moat_notes, leadership_notes, financial_health_notes
+        } = req.body;
 
         const now = new Date().toISOString();
 
@@ -113,7 +119,7 @@ router.put('/:symbol', (req, res) => {
         const existing = db.prepare('SELECT symbol FROM stock_prices WHERE symbol = ?').get(symbol);
 
         if (existing) {
-            // Update research fields
+            // Update research fields including notes
             db.prepare(`
                 UPDATE stock_prices SET 
                     theme_id = COALESCE(?, theme_id),
@@ -124,17 +130,40 @@ router.put('/:symbol', (req, res) => {
                     econ_moat_rating = ?, 
                     leadership_rating = ?, 
                     financial_health_rating = ?,
+                    overall_notes = ?,
+                    valuation_notes = ?,
+                    growth_quality_notes = ?,
+                    econ_moat_notes = ?,
+                    leadership_notes = ?,
+                    financial_health_notes = ?,
                     research_updated_at = ?
                 WHERE symbol = ?
-            `).run(theme_id ?? null, role_id ?? null, overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
-                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, now, symbol);
+            `).run(
+                theme_id ?? null, role_id ?? null,
+                overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null,
+                overall_notes ?? null, valuation_notes ?? null, growth_quality_notes ?? null,
+                econ_moat_notes ?? null, leadership_notes ?? null, financial_health_notes ?? null,
+                now, symbol
+            );
         } else {
             // Insert new row with research fields
             db.prepare(`
-                INSERT INTO stock_prices (symbol, price, name, theme_id, role_id, overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating, research_updated_at, updated_at)
-                VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(symbol, symbol, theme_id ?? null, role_id ?? null, overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
-                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null, now, now);
+                INSERT INTO stock_prices (
+                    symbol, price, name, theme_id, role_id, 
+                    overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating,
+                    overall_notes, valuation_notes, growth_quality_notes, econ_moat_notes, leadership_notes, financial_health_notes,
+                    research_updated_at, updated_at
+                )
+                VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                symbol, symbol, theme_id ?? null, role_id ?? null,
+                overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
+                econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null,
+                overall_notes ?? null, valuation_notes ?? null, growth_quality_notes ?? null,
+                econ_moat_notes ?? null, leadership_notes ?? null, financial_health_notes ?? null,
+                now, now
+            );
         }
 
         // Return the updated record with joined role/theme names

@@ -831,6 +831,20 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
     // We only fetch NEW data (from last cached date to today), not the full history
     const symbolsToFetch = [];
 
+    // Helper: check if we need to fetch based on cache freshness
+    // On weekends/holidays, we don't want to refetch if we have recent data
+    function isCacheFresh(cachedDate) {
+        if (!cachedDate) return false;
+
+        const cached = new Date(cachedDate);
+        const todayDate = new Date(today);
+        const diffDays = Math.floor((todayDate - cached) / (1000 * 60 * 60 * 24));
+
+        // If cached data is from within the last 3 days, consider it fresh
+        // This covers weekends (Sat/Sun) and most holidays
+        return diffDays <= 3;
+    }
+
     for (const symbol of symbols) {
         const cached = pricesMap.get(symbol);
 
@@ -840,6 +854,11 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
         } else {
             // Check if we need to fetch newer data
             const mostRecentCachedDate = cached[cached.length - 1]?.date;
+
+            // Skip if cache is fresh (within last 3 days - covers weekends)
+            if (mostRecentCachedDate && isCacheFresh(mostRecentCachedDate)) {
+                continue;
+            }
 
             if (mostRecentCachedDate && mostRecentCachedDate < today) {
                 // Only fetch from the day after the last cached date

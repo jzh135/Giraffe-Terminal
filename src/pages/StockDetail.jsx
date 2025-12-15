@@ -15,8 +15,6 @@ function StockDetail() {
     const [accounts, setAccounts] = useState([]);
     const [price, setPrice] = useState(null);
     const [allPrices, setAllPrices] = useState({}); // For modal
-    const [roles, setRoles] = useState([]); // User-defined roles
-    const [themes, setThemes] = useState([]); // User-defined themes
     const [loading, setLoading] = useState(true);
 
     // Modal State
@@ -28,34 +26,19 @@ function StockDetail() {
     const [editTransaction, setEditTransaction] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-    // Research editing state
-    const [editingResearch, setEditingResearch] = useState(false);
-    const [researchForm, setResearchForm] = useState({
-        theme_id: null,
-        role_id: null,
-        overall_rating: null,
-        valuation_rating: null,
-        growth_quality_rating: null,
-        econ_moat_rating: null,
-        leadership_rating: null,
-        financial_health_rating: null
-    });
-
     useEffect(() => {
         loadData();
     }, [symbol]);
 
     async function loadData() {
         try {
-            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData, accountsData, rolesData, themesData] = await Promise.all([
+            const [holdingsData, transactionsData, dividendsData, priceData, allPricesData, accountsData] = await Promise.all([
                 api.getHoldings(),
                 api.getTransactions({ symbol }),
                 api.getDividends({ symbol }),
                 api.fetchPrice(symbol),
                 api.getPrices(),
-                api.getAccounts(),
-                api.getRoles(),
-                api.getThemes()
+                api.getAccounts()
             ]);
 
             // Filter holdings for this symbol
@@ -67,8 +50,6 @@ function StockDetail() {
             setAccounts(accountsData);
             setPrice(priceData);
             setAllPrices(allPricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
-            setRoles(rolesData || []);
-            setThemes(themesData || []);
         } catch (err) {
             console.error('Failed to load stock data:', err);
         } finally {
@@ -152,30 +133,7 @@ function StockDetail() {
         }
     }
 
-    // Research editing handlers
-    function openResearchEdit() {
-        setResearchForm({
-            theme_id: price?.theme_id ?? null,
-            role_id: price?.role_id ?? null,
-            overall_rating: price?.overall_rating ?? null,
-            valuation_rating: price?.valuation_rating ?? null,
-            growth_quality_rating: price?.growth_quality_rating ?? null,
-            econ_moat_rating: price?.econ_moat_rating ?? null,
-            leadership_rating: price?.leadership_rating ?? null,
-            financial_health_rating: price?.financial_health_rating ?? null
-        });
-        setEditingResearch(true);
-    }
 
-    async function handleSaveResearch() {
-        try {
-            await api.updateStockResearch(symbol, researchForm);
-            setEditingResearch(false);
-            await loadData();
-        } catch (err) {
-            alert('Failed to save research: ' + err.message);
-        }
-    }
 
     // StarRating component - inline for simplicity
     const StarRating = ({ value, onChange, readOnly = false }) => {
@@ -310,108 +268,70 @@ function StockDetail() {
                 </div>
             </div>
 
-            {/* Research Section */}
-            <div className="card mb-lg">
+            {/* Research Section - Clickable to go to dedicated page */}
+            <div
+                className="card mb-lg"
+                onClick={() => navigate(`/holdings/${symbol}/research`)}
+                style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = '#6366f1';
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(99, 102, 241, 0.2)';
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.boxShadow = '';
+                }}
+            >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0 }}>Research</h3>
-                    {!editingResearch ? (
-                        <button className="btn btn-secondary btn-sm" onClick={openResearchEdit}>
-                            ✏️ Edit
-                        </button>
-                    ) : (
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button className="btn btn-primary btn-sm" onClick={handleSaveResearch}>Save</button>
-                            <button className="btn btn-secondary btn-sm" onClick={() => setEditingResearch(false)}>Cancel</button>
-                        </div>
-                    )}
+                    <h3 style={{ margin: 0 }}>📊 Research</h3>
+                    <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
+                        View & Edit →
+                    </span>
                 </div>
 
-                {editingResearch ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
-                        <div>
-                            <label className="form-label">Theme</label>
-                            <select
-                                className="form-input"
-                                value={researchForm.theme_id || ''}
-                                onChange={e => setResearchForm({ ...researchForm, theme_id: e.target.value ? parseInt(e.target.value) : null })}
-                            >
-                                <option value="">— Select —</option>
-                                {themes.map(theme => (
-                                    <option key={theme.id} value={theme.id}>{theme.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="form-label">Role</label>
-                            <select
-                                className="form-input"
-                                value={researchForm.role_id || ''}
-                                onChange={e => setResearchForm({ ...researchForm, role_id: e.target.value ? parseInt(e.target.value) : null })}
-                            >
-                                <option value="">— Select —</option>
-                                {roles.map(role => (
-                                    <option key={role.id} value={role.id}>{role.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="form-label">Overall Rating</label>
-                            <div><StarRating value={researchForm.overall_rating} onChange={v => setResearchForm({ ...researchForm, overall_rating: v })} /></div>
-                        </div>
-                        <div>
-                            <label className="form-label">Valuation</label>
-                            <div><StarRating value={researchForm.valuation_rating} onChange={v => setResearchForm({ ...researchForm, valuation_rating: v })} /></div>
-                        </div>
-                        <div>
-                            <label className="form-label">Growth Quality</label>
-                            <div><StarRating value={researchForm.growth_quality_rating} onChange={v => setResearchForm({ ...researchForm, growth_quality_rating: v })} /></div>
-                        </div>
-                        <div>
-                            <label className="form-label">Economic Moat</label>
-                            <div><StarRating value={researchForm.econ_moat_rating} onChange={v => setResearchForm({ ...researchForm, econ_moat_rating: v })} /></div>
-                        </div>
-                        <div>
-                            <label className="form-label">Leadership</label>
-                            <div><StarRating value={researchForm.leadership_rating} onChange={v => setResearchForm({ ...researchForm, leadership_rating: v })} /></div>
-                        </div>
-                        <div>
-                            <label className="form-label">Financial Health</label>
-                            <div><StarRating value={researchForm.financial_health_rating} onChange={v => setResearchForm({ ...researchForm, financial_health_rating: v })} /></div>
-                        </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Theme</div>
+                        <div>{price?.theme_name || <span className="text-muted">-</span>}</div>
                     </div>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Theme</div>
-                            <div>{price?.theme_name || <span className="text-muted">-</span>}</div>
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Role</div>
-                            <div>{price?.role_name || <span className="text-muted">-</span>}</div>
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Overall Rating</div>
-                            <StarRating value={price?.overall_rating} readOnly />
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Valuation</div>
-                            <StarRating value={price?.valuation_rating} readOnly />
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Growth Quality</div>
-                            <StarRating value={price?.growth_quality_rating} readOnly />
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Economic Moat</div>
-                            <StarRating value={price?.econ_moat_rating} readOnly />
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Leadership</div>
-                            <StarRating value={price?.leadership_rating} readOnly />
-                        </div>
-                        <div>
-                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Financial Health</div>
-                            <StarRating value={price?.financial_health_rating} readOnly />
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Role</div>
+                        <div>{price?.role_name || <span className="text-muted">-</span>}</div>
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Overall Rating</div>
+                        <StarRating value={price?.overall_rating} readOnly />
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Valuation</div>
+                        <StarRating value={price?.valuation_rating} readOnly />
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Growth Quality</div>
+                        <StarRating value={price?.growth_quality_rating} readOnly />
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Economic Moat</div>
+                        <StarRating value={price?.econ_moat_rating} readOnly />
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Leadership</div>
+                        <StarRating value={price?.leadership_rating} readOnly />
+                    </div>
+                    <div>
+                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>Financial Health</div>
+                        <StarRating value={price?.financial_health_rating} readOnly />
+                    </div>
+                </div>
+
+                {price?.overall_notes && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <div className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>Investment Thesis</div>
+                        <div style={{ fontSize: '0.9rem', color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
+                            {price.overall_notes.length > 200
+                                ? price.overall_notes.substring(0, 200) + '...'
+                                : price.overall_notes
+                            }
                         </div>
                     </div>
                 )}

@@ -183,6 +183,21 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-14**: Version **alpha-1.3**
+  - **Research Page**:
+    - Added dedicated Research page (`/holdings/:symbol/research`) for in-depth stock analysis.
+    - **Editable Notes**: Each of the 6 ratings (Valuation, Growth Quality, Economic Moat, Leadership, Financial Health, Overall) now has a text notes field.
+    - **Investment Thesis**: Featured section for summarizing your overall investment thesis.
+    - Research panel on stock detail page is now **clickable** with hover effects, navigating to the dedicated page.
+  - **Export Feature**:
+    - Added **Export** button on Research page to download research data as JSON with timestamp.
+    - Export includes all ratings, notes, classification (theme/role), and metadata.
+  - **Bug Fixes**:
+    - Fixed price cache check to properly handle **weekends and holidays**.
+    - Cache now considers data "fresh" if within last 3 days, preventing redundant API calls on non-trading days.
+  - **Database**:
+    - Added 6 new columns to `stock_prices` table for rating notes.
+
 - **2025-12-10**: Version **alpha-1.2**
   - **Dashboard Overhaul**:
     - Reorganized layout: Logical grouping of Performance, Allocation, Top Holdings, and Accounts.

@@ -179,5 +179,33 @@ export function runMigrations(db, __dirname) {
         console.error('Data migration failed:', err);
     }
 
+    // Migration: Add rating notes columns to stock_prices
+    try {
+        const tableInfo = db.prepare('PRAGMA table_info(stock_prices)').all();
+        const noteColumns = [
+            'valuation_notes TEXT',
+            'growth_quality_notes TEXT',
+            'econ_moat_notes TEXT',
+            'leadership_notes TEXT',
+            'financial_health_notes TEXT',
+            'overall_notes TEXT'
+        ];
+
+        for (const colDef of noteColumns) {
+            const colName = colDef.split(' ')[0];
+            const hasCol = tableInfo.some(col => col.name === colName);
+            if (!hasCol) {
+                try {
+                    db.prepare(`ALTER TABLE stock_prices ADD COLUMN ${colDef}`).run();
+                    console.log(`Migrating: Added ${colName} to stock_prices`);
+                } catch (e) {
+                    // ignore if column exists
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Rating notes migration failed:', err);
+    }
+
     console.log('Migrations complete.');
 }

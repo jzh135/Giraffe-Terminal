@@ -6,6 +6,7 @@ import Accounts from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
 import Holdings from './pages/Holdings';
 import StockDetail from './pages/StockDetail';
+import Research from './pages/Research';
 import Activity from './pages/Activity';
 import Performance from './pages/Performance';
 import Developer from './pages/Developer';
@@ -81,6 +82,7 @@ function App() {
                     <Route path="/accounts/:id" element={<AccountDetail />} />
                     <Route path="/holdings" element={<Holdings />} />
                     <Route path="/holdings/:symbol" element={<StockDetail />} />
+                    <Route path="/holdings/:symbol/research" element={<Research />} />
                     <Route path="/activity" element={<Activity />} />
                     <Route path="/performance" element={<Performance />} />
                     <Route path="/developer" element={<Developer />} />
