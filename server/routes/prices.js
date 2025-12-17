@@ -47,12 +47,16 @@ router.post('/refresh', async (req, res) => {
             try {
                 const price = await fetchYahooPrice(symbol);
                 if (price) {
-                    // Upsert the price
+                    // Upsert the price (don't overwrite manually-set target prices)
                     db.prepare(`
                         INSERT INTO stock_prices (symbol, price, name, updated_at) 
                         VALUES (?, ?, ?, ?)
-                        ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
-                    `).run(symbol, price.price, price.name, now, price.price, price.name, now);
+                        ON CONFLICT(symbol) DO UPDATE SET 
+                            price = ?, name = ?, updated_at = ?
+                    `).run(
+                        symbol, price.price, price.name, now,
+                        price.price, price.name, now
+                    );
 
                     updatedPrices.push({ symbol, ...price, updated_at: now });
                 }
@@ -79,12 +83,16 @@ router.get('/fetch/:symbol', async (req, res) => {
 
         const now = new Date().toISOString();
 
-        // Cache the price
+        // Cache the price (don't overwrite manually-set target prices)
         db.prepare(`
             INSERT INTO stock_prices (symbol, price, name, updated_at) 
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(symbol) DO UPDATE SET price = ?, name = ?, updated_at = ?
-        `).run(symbol, price.price, price.name, now, price.price, price.name, now);
+            ON CONFLICT(symbol) DO UPDATE SET 
+                price = ?, name = ?, updated_at = ?
+        `).run(
+            symbol, price.price, price.name, now,
+            price.price, price.name, now
+        );
 
         // Return with joined role/theme data
         const result = db.prepare(`
@@ -110,7 +118,8 @@ router.put('/:symbol', (req, res) => {
             overall_rating, valuation_rating, growth_quality_rating,
             econ_moat_rating, leadership_rating, financial_health_rating,
             overall_notes, valuation_notes, growth_quality_notes,
-            econ_moat_notes, leadership_notes, financial_health_notes
+            econ_moat_notes, leadership_notes, financial_health_notes,
+            target_median_price, buy_target_price, sell_target_price
         } = req.body;
 
         const now = new Date().toISOString();
@@ -119,7 +128,7 @@ router.put('/:symbol', (req, res) => {
         const existing = db.prepare('SELECT symbol FROM stock_prices WHERE symbol = ?').get(symbol);
 
         if (existing) {
-            // Update research fields including notes
+            // Update research fields including notes and price targets
             db.prepare(`
                 UPDATE stock_prices SET 
                     theme_id = COALESCE(?, theme_id),
@@ -136,6 +145,9 @@ router.put('/:symbol', (req, res) => {
                     econ_moat_notes = ?,
                     leadership_notes = ?,
                     financial_health_notes = ?,
+                    target_median_price = ?,
+                    buy_target_price = ?,
+                    sell_target_price = ?,
                     research_updated_at = ?
                 WHERE symbol = ?
             `).run(
@@ -144,6 +156,7 @@ router.put('/:symbol', (req, res) => {
                 econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null,
                 overall_notes ?? null, valuation_notes ?? null, growth_quality_notes ?? null,
                 econ_moat_notes ?? null, leadership_notes ?? null, financial_health_notes ?? null,
+                target_median_price ?? null, buy_target_price ?? null, sell_target_price ?? null,
                 now, symbol
             );
         } else {
@@ -153,15 +166,17 @@ router.put('/:symbol', (req, res) => {
                     symbol, price, name, theme_id, role_id, 
                     overall_rating, valuation_rating, growth_quality_rating, econ_moat_rating, leadership_rating, financial_health_rating,
                     overall_notes, valuation_notes, growth_quality_notes, econ_moat_notes, leadership_notes, financial_health_notes,
+                    target_median_price, buy_target_price, sell_target_price,
                     research_updated_at, updated_at
                 )
-                VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 symbol, symbol, theme_id ?? null, role_id ?? null,
                 overall_rating ?? null, valuation_rating ?? null, growth_quality_rating ?? null,
                 econ_moat_rating ?? null, leadership_rating ?? null, financial_health_rating ?? null,
                 overall_notes ?? null, valuation_notes ?? null, growth_quality_notes ?? null,
                 econ_moat_notes ?? null, leadership_notes ?? null, financial_health_notes ?? null,
+                target_median_price ?? null, buy_target_price ?? null, sell_target_price ?? null,
                 now, now
             );
         }
@@ -179,7 +194,6 @@ router.put('/:symbol', (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 
 // Helper: Fetch price from Yahoo Finance

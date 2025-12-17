@@ -330,6 +330,24 @@ function StockDetail() {
                         <div className="text-muted" style={{ fontSize: '0.85rem' }}>Financial Health</div>
                         <StarRating value={price?.financial_health_rating} readOnly />
                     </div>
+                    {price?.target_median_price > 0 && (
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Median Target</div>
+                            <div>{formatCurrency(price.target_median_price)} <span className={((price.target_median_price - currentPrice) / currentPrice) >= 0 ? 'text-positive' : 'text-negative'}>{formatPercent(((price.target_median_price - currentPrice) / currentPrice) * 100)}</span></div>
+                        </div>
+                    )}
+                    {price?.buy_target_price > 0 && (
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Buy Target</div>
+                            <div style={{ color: '#10b981' }}>{formatCurrency(price.buy_target_price)} <span className={((price.buy_target_price - currentPrice) / currentPrice) >= 0 ? 'text-positive' : 'text-negative'}>{formatPercent(((price.buy_target_price - currentPrice) / currentPrice) * 100)}</span></div>
+                        </div>
+                    )}
+                    {price?.sell_target_price > 0 && (
+                        <div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Sell Target</div>
+                            <div style={{ color: '#ef4444' }}>{formatCurrency(price.sell_target_price)} <span className={((price.sell_target_price - currentPrice) / currentPrice) >= 0 ? 'text-positive' : 'text-negative'}>{formatPercent(((price.sell_target_price - currentPrice) / currentPrice) * 100)}</span></div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Expand/Collapse Button */}

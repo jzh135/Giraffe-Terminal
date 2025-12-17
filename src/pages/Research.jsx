@@ -99,7 +99,10 @@ function Research() {
         growth_quality_notes: '',
         econ_moat_notes: '',
         leadership_notes: '',
-        financial_health_notes: ''
+        financial_health_notes: '',
+        target_median_price: null,
+        buy_target_price: null,
+        sell_target_price: null
     });
 
     useEffect(() => {
@@ -133,7 +136,10 @@ function Research() {
                 growth_quality_notes: priceData?.growth_quality_notes || '',
                 econ_moat_notes: priceData?.econ_moat_notes || '',
                 leadership_notes: priceData?.leadership_notes || '',
-                financial_health_notes: priceData?.financial_health_notes || ''
+                financial_health_notes: priceData?.financial_health_notes || '',
+                target_median_price: priceData?.target_median_price ?? null,
+                buy_target_price: priceData?.buy_target_price ?? null,
+                sell_target_price: priceData?.sell_target_price ?? null
             });
         } catch (err) {
             console.error('Failed to load research data:', err);
@@ -279,6 +285,61 @@ function Research() {
                         </select>
                     </div>
                 </div>
+            </div>
+
+            {/* Price Targets Section */}
+            <div className="card mb-lg">
+                <h3 style={{ marginTop: 0, marginBottom: '16px' }}>🎯 Price Targets</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div>
+                        <label className="form-label">Median Target Price ($)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={form.target_median_price || ''}
+                            onChange={e => setForm(prev => ({
+                                ...prev,
+                                target_median_price: e.target.value ? parseFloat(e.target.value) : null
+                            }))}
+                            placeholder="e.g. 185.50"
+                            step="0.01"
+                            min="0"
+                        />
+                    </div>
+                    <div>
+                        <label className="form-label">Buy Target Price ($)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={form.buy_target_price || ''}
+                            onChange={e => setForm(prev => ({
+                                ...prev,
+                                buy_target_price: e.target.value ? parseFloat(e.target.value) : null
+                            }))}
+                            placeholder="e.g. 150.00"
+                            step="0.01"
+                            min="0"
+                        />
+                    </div>
+                    <div>
+                        <label className="form-label">Sell Target Price ($)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={form.sell_target_price || ''}
+                            onChange={e => setForm(prev => ({
+                                ...prev,
+                                sell_target_price: e.target.value ? parseFloat(e.target.value) : null
+                            }))}
+                            placeholder="e.g. 200.00"
+                            step="0.01"
+                            min="0"
+                        />
+                    </div>
+                </div>
+                <p className="text-muted" style={{ marginTop: '12px', fontSize: '0.85rem' }}>
+                    Set your target prices for buy/sell decisions. Leave blank if not applicable.
+                </p>
             </div>
 
             {/* Overall Rating - Featured */}

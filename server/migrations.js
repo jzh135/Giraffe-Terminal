@@ -207,5 +207,31 @@ export function runMigrations(db, __dirname) {
         console.error('Rating notes migration failed:', err);
     }
 
+    // Migration: Add analyst price target columns to stock_prices
+    try {
+        const tableInfo = db.prepare('PRAGMA table_info(stock_prices)').all();
+        const analystColumns = [
+            'target_median_price REAL',
+            'analyst_count INTEGER',
+            'buy_target_price REAL',
+            'sell_target_price REAL'
+        ];
+
+        for (const colDef of analystColumns) {
+            const colName = colDef.split(' ')[0];
+            const hasCol = tableInfo.some(col => col.name === colName);
+            if (!hasCol) {
+                try {
+                    db.prepare(`ALTER TABLE stock_prices ADD COLUMN ${colDef}`).run();
+                    console.log(`Migrating: Added ${colName} to stock_prices`);
+                } catch (e) {
+                    // ignore if column exists
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Analyst price target migration failed:', err);
+    }
+
     console.log('Migrations complete.');
 }

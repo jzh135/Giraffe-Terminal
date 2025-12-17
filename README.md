@@ -183,6 +183,18 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-16**: Version **alpha-1.5**
+  - **Price Targets Feature**:
+    - Added **Median Target Price**, **Buy Target Price**, and **Sell Target Price** fields to Research page.
+    - Price targets display in the **Research panel** on Stock Detail page with percentage comparison to current price.
+    - Buy targets shown in **green**, Sell targets shown in **red** for visual clarity.
+    - Targets are **manual entry only** - stored in database and preserved across price refreshes.
+  - **Backend Improvements**:
+    - Removed non-functional Yahoo Finance analyst data fetching code.
+    - Fixed price refresh endpoints to **not overwrite** manually-entered target prices.
+  - **Database**:
+    - Added `buy_target_price` and `sell_target_price` columns to `stock_prices` table.
+
 - **2025-12-15**: Version **alpha-1.4**
   - **Research Panel Improvements**:
     - Increased character limit to **1000 characters** per notes block (was previously unlimited but now enforced).
