@@ -109,14 +109,14 @@ function Performance() {
                 </div>
 
                 <div className="stat-card">
-                    <div className="stat-label">Time-Weighted Return</div>
+                    <div className="stat-label">Time-Weighted Return (YTD)</div>
                     <div className={`stat-value ${(performance?.twr || 0) >= 0 ? 'positive' : 'negative'}`}>
                         {formatPercent(performance?.twr || 0)}
                     </div>
                 </div>
 
                 <div className="stat-card">
-                    <div className="stat-label">S&P 500 (1Y)</div>
+                    <div className="stat-label">S&P 500 (YTD)</div>
                     <div className={`stat-value ${(performance?.spy_return || 0) >= 0 ? 'positive' : 'negative'}`}>
                         {performance?.spy_return !== null
                             ? formatPercent(performance.spy_return)
@@ -125,7 +125,7 @@ function Performance() {
                 </div>
 
                 <div className="stat-card">
-                    <div className="stat-label">vs S&P 500</div>
+                    <div className="stat-label">vs S&P 500 (YTD)</div>
                     {performance?.spy_return !== null && (
                         <div className={`stat-value ${(performance?.twr || 0) - (performance?.spy_return || 0) >= 0 ? 'positive' : 'negative'}`}>
                             {formatPercent((performance?.twr || 0) - (performance?.spy_return || 0))}

@@ -37,9 +37,13 @@ const SPY_COLOR = '#fbbf24'; // Gold for S&P 500
 // Get portfolio performance with TWR and S&P 500 comparison
 router.get('/', async (req, res) => {
     try {
-        const { account_id, start_date, end_date } = req.query;
+        const { account_id, end_date } = req.query;
 
-        // Get all cash flows (deposits, withdrawals)
+        // Default to YTD (January 1st of current year) for TWR calculation
+        const currentYear = new Date().getFullYear();
+        const ytdStartDate = req.query.start_date || `${currentYear}-01-01`;
+
+        // Get all cash flows (deposits, withdrawals) within YTD period
         let cashFlowQuery = `
       SELECT date, SUM(amount) as amount
       FROM cash_movements
@@ -52,11 +56,9 @@ router.get('/', async (req, res) => {
             params.push(account_id);
         }
 
-        // Filter by date range if provided
-        if (start_date) {
-            cashFlowQuery += ' AND date >= ?';
-            params.push(start_date);
-        }
+        // Filter by YTD date range
+        cashFlowQuery += ' AND date >= ?';
+        params.push(ytdStartDate);
 
         cashFlowQuery += ' GROUP BY date ORDER BY date';
 
@@ -65,11 +67,15 @@ router.get('/', async (req, res) => {
         // Get current portfolio value
         const portfolioValue = calculatePortfolioValue(db, account_id);
 
-        // Calculate Time-Weighted Return (Modified Dietz)
-        const twr = calculateModifiedDietz(cashFlows, portfolioValue, start_date);
+        // Calculate starting portfolio value at YTD start date
+        const startSnapshot = calculateHistoricalSnapshot(account_id, ytdStartDate);
+        const startValue = startSnapshot.portfolio_value;
 
-        // Get S&P 500 comparison
-        const spyData = await fetchSPYPerformance(start_date, end_date);
+        // Calculate Time-Weighted Return (Modified Dietz) - YTD
+        const twr = calculateModifiedDietzWithStartValue(cashFlows, startValue, portfolioValue, ytdStartDate);
+
+        // Get S&P 500 comparison - also YTD
+        const spyData = await fetchSPYPerformanceYTD(ytdStartDate);
 
         res.json({
             portfolio_value: portfolioValue,
@@ -772,6 +778,82 @@ function calculateModifiedDietz(cashFlows, endValue, startDateStr) {
     if (denominator <= 0) return 0;
 
     return (numerator / denominator) * 100;
+}
+
+// Helper: Calculate TWR with explicit start value (for YTD calculation)
+function calculateModifiedDietzWithStartValue(cashFlows, startValue, endValue, startDateStr) {
+    // If no starting value, the portfolio didn't exist yet
+    if (startValue <= 0 && cashFlows.length === 0) return 0;
+
+    // Filter flows within the period
+    let flows = cashFlows;
+    if (startDateStr) {
+        flows = cashFlows.filter(cf => cf.date >= startDateStr);
+    }
+
+    // Net External Flows (F)
+    const totalFlows = flows.reduce((sum, cf) => sum + cf.amount, 0);
+
+    const today = new Date();
+    const periodStart = new Date(startDateStr);
+    const totalDurationMs = today - periodStart;
+    const totalDurationDays = totalDurationMs / (1000 * 60 * 60 * 24);
+
+    if (totalDurationDays <= 0) return 0;
+
+    // Calculate weighted flows based on time in period
+    let weightedFlows = 0;
+    for (const flow of flows) {
+        const flowDate = new Date(flow.date);
+        const daysSinceFlow = (today - flowDate) / (1000 * 60 * 60 * 24);
+        const weight = Math.max(0, daysSinceFlow / totalDurationDays);
+        weightedFlows += flow.amount * weight;
+    }
+
+    // Modified Dietz Formula:
+    // R = (V1 - V0 - F) / (V0 + Sum(Fi * Wi))
+    const numerator = endValue - startValue - totalFlows;
+    const denominator = startValue + weightedFlows;
+
+    if (denominator <= 0) return 0;
+
+    return (numerator / denominator) * 100;
+}
+
+// Helper: Fetch S&P 500 performance for YTD
+async function fetchSPYPerformanceYTD(ytdStartDate) {
+    try {
+        // Calculate period1 and period2 for Yahoo Finance
+        const startDate = new Date(ytdStartDate);
+        const endDate = new Date();
+        const period1 = Math.floor(startDate.getTime() / 1000);
+        const period2 = Math.floor(endDate.getTime() / 1000) + 86400;
+
+        const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=${period1}&period2=${period2}&interval=1d`;
+        const response = await fetch(url);
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+
+        if (data.chart?.result?.[0]) {
+            const result = data.chart.result[0];
+            const closes = result.indicators?.quote?.[0]?.close?.filter(c => c !== null) || [];
+
+            if (closes.length >= 2) {
+                const startPrice = closes[0];
+                const endPrice = closes[closes.length - 1];
+                return {
+                    return: ((endPrice - startPrice) / startPrice) * 100
+                };
+            }
+        }
+
+        return null;
+    } catch (err) {
+        console.error('Failed to fetch SPY YTD data:', err.message);
+        return null;
+    }
 }
 
 // Helper: Fetch S&P 500 performance (for main dashboard)

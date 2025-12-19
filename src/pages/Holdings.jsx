@@ -51,9 +51,41 @@ function Holdings() {
         }
     }
 
+    // Check if US stock market is currently open (9:30 AM - 4:00 PM ET, Mon-Fri)
+    function isMarketOpen() {
+        const now = new Date();
+
+        // Convert to ET timezone
+        const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+        const day = etTime.getDay(); // 0 = Sunday, 6 = Saturday
+        const hours = etTime.getHours();
+        const minutes = etTime.getMinutes();
+        const timeInMinutes = hours * 60 + minutes;
+
+        // Market closed on weekends
+        if (day === 0 || day === 6) {
+            return false;
+        }
+
+        // Market hours: 9:30 AM (570 min) to 4:00 PM (960 min) ET
+        const marketOpen = 9 * 60 + 30; // 9:30 AM = 570 minutes
+        const marketClose = 16 * 60;     // 4:00 PM = 960 minutes
+
+        return timeInMinutes >= marketOpen && timeInMinutes < marketClose;
+    }
+
     async function handleRefreshPrices() {
         setRefreshing(true);
         try {
+            // Check if market is open before fetching new prices
+            if (!isMarketOpen()) {
+                console.log('Market is closed - using cached prices');
+                const pricesData = await api.getPrices();
+                setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+                return;
+            }
+
             await api.refreshPrices();
             const pricesData = await api.getPrices(); // Get full data after refresh
             setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));

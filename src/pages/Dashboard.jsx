@@ -96,9 +96,51 @@ function Dashboard() {
         }
     }
 
+    // Check if US stock market is currently open (9:30 AM - 4:00 PM ET, Mon-Fri)
+    function isMarketOpen() {
+        const now = new Date();
+
+        // Convert to ET timezone
+        const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+        const day = etTime.getDay(); // 0 = Sunday, 6 = Saturday
+        const hours = etTime.getHours();
+        const minutes = etTime.getMinutes();
+        const timeInMinutes = hours * 60 + minutes;
+
+        // Market closed on weekends
+        if (day === 0 || day === 6) {
+            return false;
+        }
+
+        // Market hours: 9:30 AM (570 min) to 4:00 PM (960 min) ET
+        const marketOpen = 9 * 60 + 30; // 9:30 AM = 570 minutes
+        const marketClose = 16 * 60;     // 4:00 PM = 960 minutes
+
+        return timeInMinutes >= marketOpen && timeInMinutes < marketClose;
+    }
+
     async function handleRefreshPrices() {
         setRefreshing(true);
         try {
+            // Check if market is open before fetching new prices
+            if (!isMarketOpen()) {
+                console.log('Market is closed - using cached prices');
+                // Still reload cached data to ensure UI is in sync
+                const accountId = selectedAccount || undefined;
+                const [pricesData, holdingsData, allocData, perfData] = await Promise.all([
+                    api.getPrices(),
+                    api.getHoldings(accountId),
+                    api.getAllocation({ accountId, groupBy: allocationGroupBy }),
+                    api.getPerformance(accountId)
+                ]);
+                setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+                setHoldings(holdingsData);
+                setAllocation(allocData);
+                setPerformance(perfData);
+                return;
+            }
+
             await api.refreshPrices();
             // Reload all data to get updated prices and recalculate portfolio value
             const accountId = selectedAccount || undefined;
@@ -253,7 +295,7 @@ function Dashboard() {
                 </div>
 
                 <div className="stat-card">
-                    <div className="stat-label">Time-Weighted Return</div>
+                    <div className="stat-label">Time-Weighted Return (YTD)</div>
                     <div className={`stat-value ${(performance?.twr || 0) >= 0 ? 'positive' : 'negative'}`}>
                         {formatPercent(performance?.twr || 0)}
                     </div>
