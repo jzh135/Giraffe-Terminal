@@ -9,6 +9,7 @@ import StockDetail from './pages/StockDetail';
 import Research from './pages/Research';
 import Activity from './pages/Activity';
 import Performance from './pages/Performance';
+import Analysis from './pages/Analysis';
 import Developer from './pages/Developer';
 
 function App() {
@@ -67,6 +68,9 @@ function App() {
                     <NavLink to="/performance" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                         🎯 Performance
                     </NavLink>
+                    <NavLink to="/analysis" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                        🔬 Analysis
+                    </NavLink>
                     <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #333' }}>
                         <NavLink to="/developer" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                             🛠️ Developer
@@ -85,6 +89,7 @@ function App() {
                     <Route path="/holdings/:symbol/research" element={<Research />} />
                     <Route path="/activity" element={<Activity />} />
                     <Route path="/performance" element={<Performance />} />
+                    <Route path="/analysis" element={<Analysis />} />
                     <Route path="/developer" element={<Developer />} />
                 </Routes>
             </main>

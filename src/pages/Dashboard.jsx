@@ -37,6 +37,8 @@ function Dashboard() {
     async function loadData() {
         try {
             const accountId = selectedAccount || undefined;
+
+            // Load all data in parallel (using cached prices for speed)
             const [accountsData, holdingsData, pricesData, perfData, allocData] = await Promise.all([
                 api.getAccounts(),
                 api.getHoldings(accountId),
@@ -97,11 +99,19 @@ function Dashboard() {
     async function handleRefreshPrices() {
         setRefreshing(true);
         try {
-            const result = await api.refreshPrices();
-            setPrices(result.prices.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
-            // Reload allocation as it depends on prices
-            const allocData = await api.getAllocation({ accountId: selectedAccount || undefined, groupBy: allocationGroupBy });
+            await api.refreshPrices();
+            // Reload all data to get updated prices and recalculate portfolio value
+            const accountId = selectedAccount || undefined;
+            const [pricesData, holdingsData, allocData, perfData] = await Promise.all([
+                api.getPrices(),
+                api.getHoldings(accountId),
+                api.getAllocation({ accountId, groupBy: allocationGroupBy }),
+                api.getPerformance(accountId)
+            ]);
+            setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+            setHoldings(holdingsData);
             setAllocation(allocData);
+            setPerformance(perfData);
         } catch (err) {
             console.error('Failed to refresh prices:', err);
         } finally {

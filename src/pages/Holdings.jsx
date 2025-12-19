@@ -54,8 +54,9 @@ function Holdings() {
     async function handleRefreshPrices() {
         setRefreshing(true);
         try {
-            const result = await api.refreshPrices();
-            setPrices(result.prices.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+            await api.refreshPrices();
+            const pricesData = await api.getPrices(); // Get full data after refresh
+            setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
         } catch (err) {
             console.error('Failed to refresh prices:', err);
         } finally {

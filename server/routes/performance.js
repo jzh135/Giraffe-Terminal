@@ -840,9 +840,20 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
         const todayDate = new Date(today);
         const diffDays = Math.floor((todayDate - cached) / (1000 * 60 * 60 * 24));
 
-        // If cached data is from within the last 3 days, consider it fresh
-        // This covers weekends (Sat/Sun) and most holidays
-        return diffDays <= 3;
+        // If today is a weekday (Mon-Fri) and cache is not from today, it's stale
+        const dayOfWeek = todayDate.getDay();
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+
+        if (isWeekday) {
+            // On weekdays, only consider fresh if cache is from today
+            return cachedDate === today;
+        }
+
+        // On weekends, cache from Friday (or later) is fresh
+        // Saturday = 6, Sunday = 0
+        // If it's Saturday, Friday's data (1 day old) is fresh
+        // If it's Sunday, Friday's data (2 days old) is fresh
+        return diffDays <= 2;
     }
 
     for (const symbol of symbols) {
@@ -855,7 +866,7 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
             // Check if we need to fetch newer data
             const mostRecentCachedDate = cached[cached.length - 1]?.date;
 
-            // Skip if cache is fresh (within last 3 days - covers weekends)
+            // Skip if cache is fresh
             if (mostRecentCachedDate && isCacheFresh(mostRecentCachedDate)) {
                 continue;
             }

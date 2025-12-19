@@ -183,7 +183,26 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-18**: Version **alpha-1.6**
+  - **Performance Chart Fix**:
+    - Fixed chart not showing today's date - was stuck on previous trading day.
+    - Improved cache freshness logic: on weekdays, always fetch today's prices; on weekends, use Friday's data.
+  - **Price Refresh Improvements**:
+    - Fixed "Refresh Prices" button to properly update portfolio value and all dashboard stats.
+    - Holdings page refresh now correctly reloads full price data.
+    - Dashboard uses cached prices on load for fast performance; manual refresh fetches from Yahoo Finance.
+  - **Backend**:
+    - Optimized historical price fetching to be smarter about when to fetch new data.
+
 - **2025-12-16**: Version **alpha-1.5**
+  - **Analysis Page (NEW)**:
+    - Added dedicated **Analysis** page (`/analysis`) for price target analytics.
+    - **Weighted Median Growth**: Shows portfolio-weighted average upside based on median targets.
+    - **Stocks-Only Growth**: Separate stat excluding ETFs (SPY, QQQ, VOO, etc.) for pure stock analysis.
+    - **Near Buy Zone**: Lists stocks within 15% of your buy target price.
+    - **Near Sell Zone**: Lists stocks within 15% of your sell target price.
+    - **All Price Targets**: Table of all stocks with targets.
+    - **Sortable Columns**: Click any column header to sort ascending/descending with visual indicator.
   - **Price Targets Feature**:
     - Added **Median Target Price**, **Buy Target Price**, and **Sell Target Price** fields to Research page.
     - Price targets display in the **Research panel** on Stock Detail page with percentage comparison to current price.
