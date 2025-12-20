@@ -80,7 +80,8 @@ function Dashboard() {
 
             const data = await api.getPerformanceChart({
                 account_ids: accountIds,
-                timeframe: chartTimeframe
+                timeframe: chartTimeframe,
+                skip_refresh: 'true'
             });
 
             setChartData(data);

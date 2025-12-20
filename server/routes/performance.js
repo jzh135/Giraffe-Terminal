@@ -175,7 +175,8 @@ router.get('/allocation', (req, res) => {
 // Get performance chart data with normalized returns
 router.get('/chart', async (req, res) => {
     try {
-        const { account_ids, timeframe = '1Y' } = req.query;
+        const { account_ids, timeframe = '1Y', skip_refresh } = req.query;
+        const skipRefresh = skip_refresh === 'true';
 
         // Parse account IDs
         const accountIdList = account_ids ? account_ids.split(',').map(id => parseInt(id)) : [];
@@ -205,7 +206,7 @@ router.get('/chart', async (req, res) => {
 
         // Fetch historical prices for all symbols (including SPY) with extended range
         const symbolsToFetch = [...new Set([...allSymbols, 'SPY'])];
-        const historicalPrices = await fetchHistoricalPricesForSymbols(symbolsToFetch, fetchStartDate, endDate);
+        const historicalPrices = await fetchHistoricalPricesForSymbols(symbolsToFetch, fetchStartDate, endDate, skipRefresh);
 
         // Get or calculate performance data for each account (using display range)
         const accountData = await Promise.all(accounts.map(async (account, index) => {
@@ -888,7 +889,7 @@ async function fetchSPYPerformance(startDate, endDate) {
 
 // Helper: Fetch historical prices for multiple symbols from Yahoo Finance
 // Uses incremental fetching - only fetches missing dates, not the full history
-async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
+async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate, skipRefresh = false) {
     const pricesMap = new Map();
 
     // Use LOCAL date, not UTC (toISOString converts to UTC which can be "tomorrow" in evening)
@@ -907,6 +908,11 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate) {
         if (cached.length > 0) {
             pricesMap.set(symbol, cached);
         }
+    }
+
+    // If skipRefresh is true, return cached data only without fetching new prices
+    if (skipRefresh) {
+        return pricesMap;
     }
 
     // Determine which symbols need fetching and from what date
