@@ -580,7 +580,8 @@ function calculateHistoricalSnapshot(accountId, targetDate) {
     const cashBalance = (cashMovements?.total || 0) + (dividends?.total || 0) - (buys?.total || 0) + (sells?.total || 0);
 
     // Get holdings at target date (shares bought - shares sold)
-    const holdings = db.prepare(`
+    // Note: CASE WHEN date params come first, then WHERE clause params (accountId if set, then date)
+    const holdingsQuery = `
         SELECT symbol, 
                SUM(CASE WHEN type = 'buy' AND date <= ? THEN shares ELSE 0 END) -
                SUM(CASE WHEN type = 'sell' AND date <= ? THEN shares ELSE 0 END) as shares,
@@ -589,15 +590,36 @@ function calculateHistoricalSnapshot(accountId, targetDate) {
         ${whereClause ? whereClause + ' AND' : 'WHERE'} date <= ?
         GROUP BY symbol
         HAVING shares > 0
-    `).all(...params, targetDate, targetDate, targetDate, targetDate);
+    `;
+    // Order: 3 targetDates for CASE WHENs, then accountId (if present) for WHERE, then targetDate for WHERE date <= ?
+    const holdingsParams = accountId
+        ? [targetDate, targetDate, targetDate, accountId, targetDate]
+        : [targetDate, targetDate, targetDate, targetDate];
+    const holdings = db.prepare(holdingsQuery).all(...holdingsParams);
 
-    // Use current prices (we don't have historical prices for individual stocks)
+    // Use historical prices from price_history table for accurate valuation
     let holdingsValue = 0;
     let totalCostBasis = 0;
 
     for (const h of holdings) {
-        const priceRow = db.prepare('SELECT price FROM stock_prices WHERE symbol = ?').get(h.symbol);
-        holdingsValue += h.shares * (priceRow?.price || 0);
+        // First try to get the historical price closest to (but not after) the target date
+        const historicalPrice = db.prepare(`
+            SELECT close_price as price 
+            FROM price_history 
+            WHERE symbol = ? AND date <= ? 
+            ORDER BY date DESC 
+            LIMIT 1
+        `).get(h.symbol, targetDate);
+
+        let price = historicalPrice?.price;
+
+        // If no historical price found, fall back to current price (less accurate but better than 0)
+        if (price === undefined || price === null) {
+            const currentPrice = db.prepare('SELECT price FROM stock_prices WHERE symbol = ?').get(h.symbol);
+            price = currentPrice?.price || 0;
+        }
+
+        holdingsValue += h.shares * price;
         totalCostBasis += h.cost_basis || 0;
     }
 

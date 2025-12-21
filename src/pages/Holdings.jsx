@@ -18,6 +18,7 @@ function Holdings() {
     const [showSoldStocks, setShowSoldStocks] = useState(() => {
         return localStorage.getItem('showSoldStocks') === 'true';
     });
+    const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
     // Persist showSoldStocks preference
     useEffect(() => {
@@ -207,6 +208,91 @@ function Holdings() {
         </th>
     );
 
+    // Export functions
+    const getExportData = () => {
+        const accountName = selectedAccount
+            ? accounts.find(a => a.id.toString() === selectedAccount.toString())?.name || 'Account'
+            : 'All_Accounts';
+
+        const data = sortedData.map(row => ({
+            symbol: row.symbol,
+            name: row.name,
+            shares: row.totalShares,
+            price: row.price,
+            marketValue: row.marketValue,
+            avgCost: row.avgCost,
+            costBasis: row.totalCostBasis,
+            unrealizedGainLoss: row.gainLoss,
+            unrealizedGainLossPercent: row.gainLossPercent,
+            realizedGains: row.totalRealized,
+            isSold: row.isSold || false
+        }));
+
+        return { data, accountName };
+    };
+
+    const exportToCSV = () => {
+        const { data, accountName } = getExportData();
+
+        const headers = [
+            'Symbol', 'Name', 'Shares', 'Price', 'Market Value',
+            'Avg Cost', 'Cost Basis', 'Unrealized G/L', 'Unrealized G/L %',
+            'Realized Gains', 'Sold'
+        ];
+
+        const csvContent = [
+            headers.join(','),
+            ...data.map(row => [
+                row.symbol,
+                `"${row.name.replace(/"/g, '""')}"`,
+                row.shares,
+                row.price.toFixed(2),
+                row.marketValue.toFixed(2),
+                row.avgCost.toFixed(2),
+                row.costBasis.toFixed(2),
+                row.unrealizedGainLoss.toFixed(2),
+                row.unrealizedGainLossPercent.toFixed(2),
+                row.realizedGains.toFixed(2),
+                row.isSold ? 'Yes' : 'No'
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const timestamp = new Date().toISOString().split('T')[0];
+        link.href = url;
+        link.download = `holdings_${accountName}_${timestamp}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        setExportDropdownOpen(false);
+    };
+
+    const exportToJSON = () => {
+        const { data, accountName } = getExportData();
+
+        const exportObj = {
+            exportDate: new Date().toISOString(),
+            account: selectedAccount ? accountName : 'All Accounts',
+            totalHoldings: data.length,
+            totalMarketValue: data.reduce((sum, r) => sum + r.marketValue, 0),
+            totalUnrealizedGainLoss: data.reduce((sum, r) => sum + r.unrealizedGainLoss, 0),
+            totalRealizedGains: data.reduce((sum, r) => sum + r.realizedGains, 0),
+            holdings: data
+        };
+
+        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const timestamp = new Date().toISOString().split('T')[0];
+        link.href = url;
+        link.download = `holdings_${accountName}_${timestamp}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        setExportDropdownOpen(false);
+    };
+
+
     if (loading) {
         return (
             <div className="loading">
@@ -233,6 +319,79 @@ function Holdings() {
                     >
                         {refreshing ? '⏳ Refreshing...' : '🔄 Refresh Prices'}
                     </button>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                        >
+                            📤 Export
+                        </button>
+                        {exportDropdownOpen && (
+                            <>
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        zIndex: 99
+                                    }}
+                                    onClick={() => setExportDropdownOpen(false)}
+                                />
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    right: 0,
+                                    marginTop: '0.25rem',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                    zIndex: 100,
+                                    minWidth: '140px',
+                                    overflow: 'hidden'
+                                }}>
+                                    <button
+                                        className="btn"
+                                        style={{
+                                            display: 'block',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '0.75rem 1rem',
+                                            border: 'none',
+                                            borderRadius: 0,
+                                            background: 'transparent',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                        onClick={exportToCSV}
+                                        onMouseEnter={(e) => e.target.style.background = 'var(--bg-tertiary)'}
+                                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                    >
+                                        📊 Export CSV
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{
+                                            display: 'block',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '0.75rem 1rem',
+                                            border: 'none',
+                                            borderRadius: 0,
+                                            background: 'transparent',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                        onClick={exportToJSON}
+                                        onMouseEnter={(e) => e.target.style.background = 'var(--bg-tertiary)'}
+                                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                    >
+                                        📋 Export JSON
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
