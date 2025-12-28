@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -10,7 +9,7 @@ const dataDir = join(__dirname, '..', 'data');
 
 // Ensure data directory exists
 if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
 }
 
 const dbPath = join(dataDir, 'giraffe.db');

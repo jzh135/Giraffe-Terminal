@@ -57,7 +57,13 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
@@ -405,13 +411,13 @@ body {
 }
 
 /* Hide number input spinners (arrows) to prevent accidental scrolling */
-.form-input[type="number"]::-webkit-outer-spin-button,
-.form-input[type="number"]::-webkit-inner-spin-button {
+.form-input[type='number']::-webkit-outer-spin-button,
+.form-input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.form-input[type="number"] {
+.form-input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -900,7 +906,7 @@ body {
   color: var(--text-primary);
 }
 
-.legend-item input[type="checkbox"] {
+.legend-item input[type='checkbox'] {
   width: 14px;
   height: 14px;
   accent-color: var(--accent-primary);

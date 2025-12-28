@@ -23,10 +23,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-
 // API Routes
 app.get('/', (req, res) => {
-    res.json({ message: 'Giraffe Terminal API is running', version: '1.0.0' });
+  res.json({ message: 'Giraffe Terminal API is running', version: '1.0.0' });
 });
 
 app.use('/api/accounts', accountsRouter);
@@ -43,11 +42,11 @@ app.use('/api/themes', themesRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({ error: err.message || 'Internal server error' });
+  console.error('Error:', err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 app.listen(PORT, () => {
-    console.log(`Giraffe Terminal API running on http://localhost:${PORT}`);
-    console.log(`Database connected.`);
+  console.log(`Giraffe Terminal API running on http://localhost:${PORT}`);
+  console.log(`Database connected.`);
 });
