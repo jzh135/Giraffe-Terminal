@@ -15,6 +15,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import * as api from '../api';
+import { ToastContainer, useToast } from '../components/Toast';
 
 function Dashboard() {
   const [accounts, setAccounts] = useState([]);
@@ -34,6 +35,9 @@ function Dashboard() {
   const [chartAccounts, setChartAccounts] = useState([]);
   const [showSpy, setShowSpy] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
+
+  // Toast notifications
+  const { toasts, addToast, removeToast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -136,25 +140,11 @@ function Dashboard() {
   async function handleRefreshPrices() {
     setRefreshing(true);
     try {
-      // Check if market is open before fetching new prices
-      if (!isMarketOpen()) {
-        console.log('Market is closed - using cached prices');
-        // Still reload cached data to ensure UI is in sync
-        const accountId = selectedAccount || undefined;
-        const [pricesData, holdingsData, allocData, perfData] = await Promise.all([
-          api.getPrices(),
-          api.getHoldings(accountId),
-          api.getAllocation({ accountId, groupBy: allocationGroupBy }),
-          api.getPerformance(accountId),
-        ]);
-        setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
-        setHoldings(holdingsData);
-        setAllocation(allocData);
-        setPerformance(perfData);
-        return;
-      }
+      const marketOpen = isMarketOpen();
 
-      await api.refreshPrices();
+      // Always refresh to fill missing history, even when market is closed
+      const result = await api.refreshPrices();
+
       // Reload all data to get updated prices and recalculate portfolio value
       const accountId = selectedAccount || undefined;
       const [pricesData, holdingsData, allocData, perfData] = await Promise.all([
@@ -167,8 +157,19 @@ function Dashboard() {
       setHoldings(holdingsData);
       setAllocation(allocData);
       setPerformance(perfData);
+
+      // Show success toast with details
+      const historyMsg = result.historyUpdated > 0
+        ? ` (+${result.historyUpdated} history points)`
+        : '';
+      const marketStatus = !marketOpen ? ' (market closed)' : '';
+      addToast(`Refreshed ${result.prices?.length || 0} prices${historyMsg}${marketStatus}`, 'success');
+
+      // Also reload chart data to reflect new prices
+      loadChartData();
     } catch (err) {
       console.error('Failed to refresh prices:', err);
+      addToast('Failed to refresh prices: ' + err.message, 'error');
     } finally {
       setRefreshing(false);
     }
@@ -257,6 +258,9 @@ function Dashboard() {
 
   return (
     <div>
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* Header */}
       <div className="page-header">
         <div>
@@ -378,7 +382,7 @@ function Dashboard() {
                         name === 'spy'
                           ? 'S&P 500'
                           : chartData.accounts?.find((a) => `account_${a.id}` === name)?.name ||
-                            name;
+                          name;
                       return [`${value?.toFixed(2)}%`, formattedName];
                     }}
                     labelFormatter={formatChartDate}

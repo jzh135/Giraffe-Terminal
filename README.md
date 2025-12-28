@@ -185,16 +185,29 @@ npm install
 
 ## 📝 Dev Log
 
+- **2025-12-28**: Version **alpha-1.8**
+  - **Unified Price Refresh**:
+    - Single "Refresh Prices" button now updates current prices, historical data, AND S&P 500 benchmark.
+    - Fills missing historical price gaps from Yahoo Finance.
+    - Works even when market is closed (fetches latest available data).
+  - **Toast Notifications**:
+    - Added modern toast notification system for user feedback.
+    - Shows success/warning/error messages with auto-dismiss.
+    - New `src/components/Toast.jsx` reusable component.
+  - **Single Source of Truth**:
+    - `price_history` table is now the authoritative source for all prices.
+    - Performance chart and dashboard use the same data.
+
 - **2025-12-28**: Version **alpha-1.7**
   - **SEC EDGAR Integration (NEW)**:
-    - Added full SEC EDGAR API integration for 10-K annual reports.
-    - New endpoints: `/api/sec/cik/:ticker`, `/api/sec/filings/:ticker`, `/api/sec/10k/:ticker`, `/api/sec/10k/:ticker/text`.
+    - Added full SEC EDGAR API integration for 10-K and 10-Q reports.
+    - New endpoints: `/api/sec/cik/:ticker`, `/api/sec/filings/:ticker`, `/api/sec/10k/:ticker`, `/api/sec/10q/:ticker`.
     - Ticker-to-CIK mapping with 24-hour caching.
     - Plain text extraction endpoint for AI agent use.
-    - 10-K filings cached locally in `data/sec-filings/`.
+    - Filings cached locally in `data/sec-filings/`.
   - **Stock Detail Page**:
-    - Added **📄 SEC 10-K Filings** collapsible section.
-    - Shows 5 most recent 10-K filings with direct links to SEC.gov.
+    - Added **📄 SEC Filings** collapsible section with tabbed 10-K/10-Q interface.
+    - Shows 5 most recent filings for each type with direct links to SEC.gov.
   - **Design Documentation**:
     - Added `design-description/` folder with comprehensive docs.
     - Includes architecture, database schema, API docs, page designs.

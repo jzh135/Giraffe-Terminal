@@ -237,20 +237,21 @@ Get cached prices for symbols.
 - `symbols` - Comma-separated list
 
 #### `POST /api/prices/refresh`
-Refresh prices from Yahoo Finance.
+Refresh all prices from Yahoo Finance. This is the **main sync endpoint** that:
+- Fetches current prices for all holdings
+- Fills missing historical prices in `price_history`
+- Updates S&P 500 (SPY) benchmark data
 
-**Request:**
-```json
-{
-  "symbols": ["AAPL", "MSFT", "GOOGL"]
-}
-```
+**Request:** No body required (refreshes all holdings)
 
 **Response:**
 ```json
 {
-  "AAPL": { "price": 175.50, "updated_at": "..." },
-  "MSFT": { "price": 380.25, "updated_at": "..." }
+  "message": "Refreshed 15 prices, added 42 history points",
+  "prices": [
+    { "symbol": "AAPL", "price": 175.50, "name": "Apple Inc.", "updated_at": "..." }
+  ],
+  "historyUpdated": 42
 }
 ```
 

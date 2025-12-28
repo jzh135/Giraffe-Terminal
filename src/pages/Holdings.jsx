@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import StockSplitModal from '../components/modals/StockSplitModal';
+import { ToastContainer, useToast } from '../components/Toast';
 import { useSort } from '../hooks/useSort';
 
 function Holdings() {
@@ -19,6 +20,9 @@ function Holdings() {
     return localStorage.getItem('showSoldStocks') === 'true';
   });
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+
+  // Toast notifications
+  const { toasts, addToast, removeToast } = useToast();
 
   // Persist showSoldStocks preference
   useEffect(() => {
@@ -80,19 +84,22 @@ function Holdings() {
   async function handleRefreshPrices() {
     setRefreshing(true);
     try {
-      // Check if market is open before fetching new prices
-      if (!isMarketOpen()) {
-        console.log('Market is closed - using cached prices');
-        const pricesData = await api.getPrices();
-        setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
-        return;
-      }
+      const marketOpen = isMarketOpen();
 
-      await api.refreshPrices();
+      // Always refresh to fill missing history, even when market is closed
+      const result = await api.refreshPrices();
       const pricesData = await api.getPrices(); // Get full data after refresh
       setPrices(pricesData.reduce((acc, p) => ({ ...acc, [p.symbol]: p }), {}));
+
+      // Show success toast with details
+      const historyMsg = result.historyUpdated > 0
+        ? ` (+${result.historyUpdated} history points)`
+        : '';
+      const marketStatus = !marketOpen ? ' (market closed)' : '';
+      addToast(`Refreshed ${result.prices?.length || 0} prices${historyMsg}${marketStatus}`, 'success');
     } catch (err) {
       console.error('Failed to refresh prices:', err);
+      addToast('Failed to refresh prices: ' + err.message, 'error');
     } finally {
       setRefreshing(false);
     }
@@ -334,6 +341,9 @@ function Holdings() {
 
   return (
     <div>
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Holdings</h1>

@@ -535,6 +535,18 @@ body {
   }
 }
 
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

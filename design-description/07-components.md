@@ -84,6 +84,35 @@ Located in `src/components/modals/`
 - Color variants
 - Pill shape
 
+### Toast Notifications
+Located in `src/components/Toast.jsx`
+
+**Components:**
+- `ToastContainer` - Renders all active toasts
+- `Toast` - Individual notification
+
+**Hook:**
+- `useToast()` - Returns `{ toasts, addToast, removeToast }`
+
+**Usage:**
+```jsx
+import { ToastContainer, useToast } from '../components/Toast';
+
+const { toasts, addToast, removeToast } = useToast();
+
+// Show toast
+addToast('Message', 'success'); // success | error | warning | info
+
+// Render
+<ToastContainer toasts={toasts} removeToast={removeToast} />
+```
+
+**Features:**
+- Auto-dismiss after 4 seconds
+- Click to dismiss
+- Slide-in animation
+- Stacks vertically
+
 ---
 
 ## Chart Components
