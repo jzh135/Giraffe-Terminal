@@ -10,7 +10,7 @@ echo.
 REM Change to the project directory
 cd /d "%~dp0"
 
-echo [STEP 1/4] Checking Environment...
+echo [STEP 1/5] Checking Environment...
 echo.
 
 REM Check if Node.js is installed
@@ -66,7 +66,19 @@ echo   [OK] npm detected:
 for /f "tokens=*" %%i in ('npm --version') do echo        Version: %%i
 echo.
 
-echo [STEP 2/4] Cleaning up old dependencies...
+REM Check Python (optional - for AI agent)
+set PYTHON_FOUND=0
+where python >nul 2>nul
+if not errorlevel 1 (
+    set PYTHON_FOUND=1
+    echo   [OK] Python detected:
+    for /f "tokens=*" %%i in ('python --version') do echo        Version: %%i
+) else (
+    echo   [INFO] Python not found (optional - needed for AI agent)
+)
+echo.
+
+echo [STEP 2/5] Cleaning up old dependencies...
 echo.
 
 REM Remove node_modules if it exists but is corrupted
@@ -83,7 +95,7 @@ if exist "package-lock.json" (
 echo   [OK] Cleanup complete
 echo.
 
-echo [STEP 3/4] Installing Dependencies...
+echo [STEP 3/5] Installing Node.js Dependencies...
 echo.
 echo   This may take a few minutes...
 echo.
@@ -104,10 +116,57 @@ if errorlevel 1 (
 )
 
 echo.
-echo   [OK] Dependencies installed successfully
+echo   [OK] Node.js dependencies installed successfully
 echo.
 
-echo [STEP 4/4] Finalizing...
+echo [STEP 4/5] Setting up AI Agent (Python)...
+echo.
+
+if %PYTHON_FOUND%==1 (
+    REM Check if venv already exists
+    if exist "agent\venv\Scripts\python.exe" (
+        echo   [OK] AI Agent virtual environment already exists
+    ) else (
+        echo   Creating Python virtual environment...
+        python -m venv agent\venv
+        
+        if errorlevel 1 (
+            echo   [WARNING] Failed to create virtual environment
+            echo   AI Agent will not be available
+        ) else (
+            echo   [OK] Virtual environment created
+        )
+    )
+    
+    REM Install Python dependencies
+    if exist "agent\venv\Scripts\pip.exe" (
+        echo   Installing Python dependencies...
+        agent\venv\Scripts\pip install -q -r agent\requirements.txt
+        
+        if errorlevel 1 (
+            echo   [WARNING] Failed to install Python dependencies
+        ) else (
+            echo   [OK] Python dependencies installed
+        )
+    )
+    
+    REM Create .env file if it doesn't exist
+    if not exist "agent\.env" (
+        if exist "agent\.env.example" (
+            copy "agent\.env.example" "agent\.env" >nul
+            echo   [INFO] Created agent\.env file
+            echo          Please add your GOOGLE_API_KEY to enable AI analysis
+        )
+    ) else (
+        echo   [OK] AI Agent .env file exists
+    )
+) else (
+    echo   [SKIP] Python not found - AI Agent will not be installed
+    echo          Install Python from https://python.org to enable AI features
+)
+echo.
+
+echo [STEP 5/5] Finalizing...
 echo.
 
 REM Ensure data folder exists
@@ -139,7 +198,20 @@ echo.
 echo   You can now use 'start-server.bat' to launch the application.
 echo.
 echo   The application will be available at:
-echo     Frontend: http://localhost:5173
-echo     Backend:  http://localhost:3001
+echo     Frontend:  http://localhost:5173
+echo     Backend:   http://localhost:3001
+if exist "agent\venv\Scripts\python.exe" (
+    echo     AI Agent:  http://localhost:8000
+    if not exist "agent\.env" (
+        echo.
+        echo   ⚠️  Note: Add your GOOGLE_API_KEY to agent\.env to enable AI analysis
+    ) else (
+        findstr /C:"your-google-api-key-here" "agent\.env" >nul 2>nul
+        if not errorlevel 1 (
+            echo.
+            echo   ⚠️  Note: Replace 'your-google-api-key-here' in agent\.env with your actual API key
+        )
+    )
+)
 echo.
 pause

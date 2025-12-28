@@ -29,13 +29,11 @@ function StockDetail() {
   // Research panel expansion
   const [researchExpanded, setResearchExpanded] = useState(false);
 
-  // SEC 10-K Filings
-  const [secFilings, setSecFilings] = useState([]);
-  const [sec10QFilings, setSec10QFilings] = useState([]);
-  const [secLoading, setSecLoading] = useState(false);
-  const [secError, setSecError] = useState(null);
-  const [secExpanded, setSecExpanded] = useState(false);
-  const [secTab, setSecTab] = useState('10-K'); // '10-K' or '10-Q'
+  // AI Investment Analysis
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiExpanded, setAiExpanded] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -75,23 +73,18 @@ function StockDetail() {
     }
   }
 
-  // Load SEC 10-K filings
-  async function loadSecFilings() {
-    if (secFilings.length > 0 && sec10QFilings.length > 0) return; // Already loaded
-    setSecLoading(true);
-    setSecError(null);
+  // Run AI Investment Analysis
+  async function runAiAnalysis() {
+    setAiLoading(true);
+    setAiError(null);
     try {
-      const [data10K, data10Q] = await Promise.all([
-        api.getSecFilings(symbol, { form: '10-K', limit: 5 }),
-        api.getSecFilings(symbol, { form: '10-Q', limit: 5 })
-      ]);
-      setSecFilings(data10K.filings || []);
-      setSec10QFilings(data10Q.filings || []);
+      const result = await api.analyzeStock(symbol, { numQuarters: 3 });
+      setAiAnalysis(result);
     } catch (err) {
-      console.error('Failed to load SEC filings:', err);
-      setSecError(err.message);
+      console.error('Failed to run AI analysis:', err);
+      setAiError(err.message);
     } finally {
-      setSecLoading(false);
+      setAiLoading(false);
     }
   }
 
@@ -665,7 +658,7 @@ function StockDetail() {
         )}
       </div>
 
-      {/* SEC Filings Section */}
+      {/* AI Investment Analysis Section */}
       <div className="card mb-lg">
         <div
           style={{
@@ -674,177 +667,167 @@ function StockDetail() {
             alignItems: 'center',
             cursor: 'pointer',
           }}
-          onClick={() => {
-            setSecExpanded(!secExpanded);
-            if (!secExpanded) loadSecFilings();
-          }}
+          onClick={() => setAiExpanded(!aiExpanded)}
         >
-          <h3 style={{ margin: 0 }}>📄 SEC Filings</h3>
+          <h3 style={{ margin: 0 }}>🤖 AI Investment Analysis</h3>
           <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
-            {secExpanded ? '▲ Collapse' : '▼ Expand'}
+            {aiExpanded ? '▲ Collapse' : '▼ Expand'}
           </span>
         </div>
 
-        {secExpanded && (
+        {aiExpanded && (
           <div style={{ marginTop: '16px' }}>
-            {/* Tab Buttons */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <button
-                className={`btn ${secTab === '10-K' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={(e) => { e.stopPropagation(); setSecTab('10-K'); }}
-              >
-                10-K (Annual)
-              </button>
-              <button
-                className={`btn ${secTab === '10-Q' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={(e) => { e.stopPropagation(); setSecTab('10-Q'); }}
-              >
-                10-Q (Quarterly)
-              </button>
-            </div>
-
-            {secLoading && (
-              <div className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>
-                <div className="spinner" style={{ margin: '0 auto 10px' }}></div>
-                Loading SEC filings...
+            {!aiAnalysis && !aiLoading && !aiError && (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <p className="text-muted" style={{ marginBottom: '16px' }}>
+                  Analyze {symbol} using AI. Extracts data from the 3 most recent 10-Q filings.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    runAiAnalysis();
+                  }}
+                >
+                  🚀 Run AI Analysis
+                </button>
+                <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '12px' }}>
+                  Requires the Python AI agent to be running on port 8000.
+                </p>
               </div>
             )}
 
-            {secError && (
+            {aiLoading && (
+              <div className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>
+                <div className="spinner" style={{ margin: '0 auto 10px' }}></div>
+                Analyzing {symbol} - extracting financial data from SEC filings...
+              </div>
+            )}
+
+            {aiError && (
               <div style={{
                 padding: '12px',
                 background: 'rgba(239, 68, 68, 0.1)',
                 borderRadius: '8px',
                 color: '#ef4444'
               }}>
-                ⚠️ {secError}
+                ⚠️ {aiError}
                 <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>
-                  This may be an ETF or the ticker is not found in SEC records.
+                  Make sure the Python AI agent is running: <code>cd agent && python main.py</code>
                 </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: '8px' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAiError(null);
+                  }}
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
-            {!secLoading && !secError && (
-              <>
-                {/* 10-K Tab */}
-                {secTab === '10-K' && (
-                  <>
-                    {secFilings.length === 0 ? (
-                      <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
-                        No 10-K filings found for {symbol}.
+            {aiAnalysis && (
+              <div>
+                {/* Investment Summary */}
+                <div style={{
+                  padding: '16px',
+                  background: 'rgba(99, 102, 241, 0.1)',
+                  borderRadius: '8px',
+                  marginBottom: '16px'
+                }}>
+                  <h4 style={{ margin: '0 0 8px 0' }}>📊 Investment Summary</h4>
+                  <p style={{ margin: 0, lineHeight: 1.6 }}>
+                    {aiAnalysis.investment_summary}
+                  </p>
+                </div>
+
+                {/* Trend Analysis */}
+                {aiAnalysis.trend_analysis && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <h4 style={{ margin: '0 0 12px 0' }}>📈 Trend Analysis</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                        <div className="text-muted" style={{ fontSize: '0.8rem' }}>Revenue Trend</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          {aiAnalysis.trend_analysis.revenue_trend || '-'}
+                        </div>
                       </div>
-                    ) : (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Filing Date</th>
-                            <th>Form</th>
-                            <th>Document</th>
-                            <th className="text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {secFilings.map((filing, idx) => (
-                            <tr key={idx}>
-                              <td>{formatDate(filing.filingDate)}</td>
-                              <td>
-                                <span className="badge badge-neutral">{filing.form}</span>
-                              </td>
-                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {filing.primaryDocument}
-                              </td>
-                              <td className="text-right">
-                                <div className="action-row justify-end">
-                                  <a
-                                    href={filing.documentUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn-secondary btn-sm"
-                                    title="View on SEC"
-                                  >
-                                    🔗 View
-                                  </a>
-                                  <a
-                                    href={filing.indexUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn-secondary btn-sm"
-                                    title="View all filing documents"
-                                  >
-                                    📁 Index
-                                  </a>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </>
+                      <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                        <div className="text-muted" style={{ fontSize: '0.8rem' }}>Avg YoY Growth</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          {aiAnalysis.trend_analysis.avg_revenue_growth_yoy
+                            ? `${(aiAnalysis.trend_analysis.avg_revenue_growth_yoy * 100).toFixed(1)}%`
+                            : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                        <div className="text-muted" style={{ fontSize: '0.8rem' }}>Margin Trend</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          {aiAnalysis.trend_analysis.margin_trend || '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
-                {/* 10-Q Tab */}
-                {secTab === '10-Q' && (
-                  <>
-                    {sec10QFilings.length === 0 ? (
-                      <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
-                        No 10-Q filings found for {symbol}.
-                      </div>
-                    ) : (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Filing Date</th>
-                            <th>Form</th>
-                            <th>Document</th>
-                            <th className="text-right">Actions</th>
+                {/* Quarterly Metrics Table */}
+                {aiAnalysis.quarterly_metrics && aiAnalysis.quarterly_metrics.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <h4 style={{ margin: '0 0 12px 0' }}>📋 Quarterly Metrics (10-Q)</h4>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          <th className="text-right">Revenue</th>
+                          <th className="text-right">Net Income</th>
+                          <th className="text-right">EPS</th>
+                          <th className="text-right">Gross Margin</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiAnalysis.quarterly_metrics.map((q, idx) => (
+                          <tr key={idx}>
+                            <td>{q.fiscal_period || q.period_end}</td>
+                            <td className="text-right">
+                              {q.revenue ? `$${(q.revenue / 1e9).toFixed(2)}B` : '-'}
+                            </td>
+                            <td className="text-right">
+                              {q.net_income ? `$${(q.net_income / 1e9).toFixed(2)}B` : '-'}
+                            </td>
+                            <td className="text-right">
+                              {q.eps_diluted ? `$${q.eps_diluted.toFixed(2)}` : '-'}
+                            </td>
+                            <td className="text-right">
+                              {q.gross_margin ? `${(q.gross_margin * 100).toFixed(1)}%` : '-'}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {sec10QFilings.map((filing, idx) => (
-                            <tr key={idx}>
-                              <td>{formatDate(filing.filingDate)}</td>
-                              <td>
-                                <span className="badge badge-warning">{filing.form}</span>
-                              </td>
-                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {filing.primaryDocument}
-                              </td>
-                              <td className="text-right">
-                                <div className="action-row justify-end">
-                                  <a
-                                    href={filing.documentUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn-secondary btn-sm"
-                                    title="View on SEC"
-                                  >
-                                    🔗 View
-                                  </a>
-                                  <a
-                                    href={filing.indexUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn-secondary btn-sm"
-                                    title="View all filing documents"
-                                  >
-                                    📁 Index
-                                  </a>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-              </>
+
+                {/* Re-run button */}
+                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAiAnalysis(null);
+                      runAiAnalysis();
+                    }}
+                  >
+                    🔄 Re-run Analysis
+                  </button>
+                </div>
+
+                <div className="text-muted" style={{ fontSize: '0.8rem', marginTop: '12px', textAlign: 'center' }}>
+                  Analysis generated on {aiAnalysis.analysis_date || new Date().toLocaleDateString()}
+                </div>
+              </div>
             )}
-
-            <div className="text-muted" style={{ fontSize: '0.8rem', marginTop: '12px', textAlign: 'center' }}>
-              Data from SEC EDGAR. Click 🔗 View to read the full filing on SEC.gov.
-            </div>
           </div>
         )}
       </div>
