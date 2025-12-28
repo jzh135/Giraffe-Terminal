@@ -337,7 +337,7 @@ Delete a theme.
 
 ---
 
-### SEC EDGAR (10-K Filings)
+### SEC EDGAR (10-K and 10-Q Filings)
 
 Access SEC EDGAR filings for companies. Uses official SEC API (no authentication required).
 
@@ -381,7 +381,7 @@ Get list of SEC filings for a company.
 ```
 
 #### `GET /api/sec/10k/:ticker`
-Download and cache a 10-K filing.
+Download and cache a 10-K (annual) filing.
 
 **Query Parameters:**
 - `year` - Fiscal year (optional, defaults to most recent)
@@ -389,6 +389,16 @@ Download and cache a 10-K filing.
 
 #### `GET /api/sec/10k/:ticker/text`
 Get 10-K as plain text (HTML stripped) for AI processing.
+
+#### `GET /api/sec/10q/:ticker`
+Download and cache a 10-Q (quarterly) filing.
+
+**Query Parameters:**
+- `quarter` - Year to filter by (optional, defaults to most recent)
+- `includeContent` - Set to "true" to include raw HTML
+
+#### `GET /api/sec/10q/:ticker/text`
+Get 10-Q as plain text (HTML stripped) for AI processing.
 
 #### `GET /api/sec/search`
 Search for companies by name or ticker.

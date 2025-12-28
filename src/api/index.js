@@ -185,5 +185,13 @@ export const getSec10K = (ticker, options = {}) => {
   return request(`/sec/10k/${ticker}${query ? `?${query}` : ''}`);
 };
 export const getSec10KText = (ticker) => request(`/sec/10k/${ticker}/text`);
+export const getSec10Q = (ticker, options = {}) => {
+  const params = new URLSearchParams();
+  if (options.quarter) params.append('quarter', options.quarter);
+  if (options.includeContent) params.append('includeContent', 'true');
+  const query = params.toString();
+  return request(`/sec/10q/${ticker}${query ? `?${query}` : ''}`);
+};
+export const getSec10QText = (ticker) => request(`/sec/10q/${ticker}/text`);
 export const searchSecCompanies = (query, limit = 20) =>
   request(`/sec/search?q=${encodeURIComponent(query)}&limit=${limit}`);

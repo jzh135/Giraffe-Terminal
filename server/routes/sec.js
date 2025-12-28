@@ -389,6 +389,214 @@ router.get('/10k/:ticker/text', async (req, res) => {
 });
 
 /**
+ * GET /api/sec/10q/:ticker
+ * Get the most recent 10-Q filing content (or specific quarter)
+ */
+router.get('/10q/:ticker', async (req, res) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase();
+    const quarter = req.query.quarter; // Optional: Q1, Q2, Q3, or year like 2024
+
+    // Get CIK for ticker
+    const tickerMap = await getTickerToCikMap();
+    if (!tickerMap[ticker]) {
+      return res.status(404).json({
+        error: 'Ticker not found',
+        ticker
+      });
+    }
+
+    const { cik, cikPadded, name } = tickerMap[ticker];
+
+    // Fetch company submissions
+    const submissionsUrl = `${SEC_SUBMISSIONS_URL}${cikPadded}.json`;
+    const response = await fetch(submissionsUrl, {
+      headers: { 'User-Agent': SEC_USER_AGENT }
+    });
+
+    if (!response.ok) {
+      throw new Error(`SEC API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const recentFilings = data.filings?.recent || {};
+    const forms = recentFilings.form || [];
+    const accessionNumbers = recentFilings.accessionNumber || [];
+    const filingDates = recentFilings.filingDate || [];
+    const primaryDocuments = recentFilings.primaryDocument || [];
+
+    // Find the 10-Q filing (optionally by quarter/year)
+    let targetIndex = -1;
+    for (let i = 0; i < forms.length; i++) {
+      if (forms[i] === '10-Q') {
+        if (quarter) {
+          // Check if this filing is for the requested year
+          const filingYear = filingDates[i].substring(0, 4);
+          if (filingYear === quarter) {
+            targetIndex = i;
+            break;
+          }
+        } else {
+          // Get the most recent
+          targetIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (targetIndex === -1) {
+      return res.status(404).json({
+        error: '10-Q not found',
+        message: quarter ? `No 10-Q found for ${quarter}` : 'No 10-Q filings found'
+      });
+    }
+
+    const accessionNumber = accessionNumbers[targetIndex];
+    const accessionForUrl = accessionNumber.replace(/-/g, '');
+    const primaryDoc = primaryDocuments[targetIndex];
+    const documentUrl = `${SEC_ARCHIVES_URL}/${cik}/${accessionForUrl}/${primaryDoc}`;
+
+    // Check if we already have this filing cached locally
+    const localFilename = `${ticker}_10Q_${filingDates[targetIndex]}.htm`;
+    const localPath = path.join(FILINGS_DIR, localFilename);
+
+    let content;
+    if (fs.existsSync(localPath)) {
+      console.log(`Loading cached 10-Q for ${ticker} from ${localPath}`);
+      content = fs.readFileSync(localPath, 'utf-8');
+    } else {
+      // Download the filing
+      console.log(`Downloading 10-Q for ${ticker} from ${documentUrl}`);
+      const docResponse = await fetch(documentUrl, {
+        headers: { 'User-Agent': SEC_USER_AGENT }
+      });
+
+      if (!docResponse.ok) {
+        throw new Error(`Failed to download document: ${docResponse.status}`);
+      }
+
+      content = await docResponse.text();
+
+      // Cache locally
+      fs.writeFileSync(localPath, content, 'utf-8');
+      console.log(`Cached 10-Q to ${localPath}`);
+    }
+
+    res.json({
+      ticker,
+      cik,
+      companyName: name,
+      filingDate: filingDates[targetIndex],
+      accessionNumber,
+      documentUrl,
+      localPath,
+      contentLength: content.length,
+      // Include the raw content for AI processing
+      content: req.query.includeContent === 'true' ? content : undefined,
+      message: req.query.includeContent === 'true'
+        ? 'Full content included'
+        : 'Add ?includeContent=true to include raw HTML content'
+    });
+  } catch (err) {
+    console.error('Error fetching 10-Q:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/sec/10q/:ticker/text
+ * Get the 10-Q content as plain text (stripped HTML)
+ */
+router.get('/10q/:ticker/text', async (req, res) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase();
+
+    // Get CIK for ticker
+    const tickerMap = await getTickerToCikMap();
+    if (!tickerMap[ticker]) {
+      return res.status(404).json({ error: 'Ticker not found', ticker });
+    }
+
+    const { cik, cikPadded, name } = tickerMap[ticker];
+
+    // Fetch company submissions
+    const submissionsUrl = `${SEC_SUBMISSIONS_URL}${cikPadded}.json`;
+    const response = await fetch(submissionsUrl, {
+      headers: { 'User-Agent': SEC_USER_AGENT }
+    });
+
+    if (!response.ok) {
+      throw new Error(`SEC API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const recentFilings = data.filings?.recent || {};
+    const forms = recentFilings.form || [];
+    const accessionNumbers = recentFilings.accessionNumber || [];
+    const filingDates = recentFilings.filingDate || [];
+    const primaryDocuments = recentFilings.primaryDocument || [];
+
+    // Find most recent 10-Q
+    let targetIndex = forms.findIndex(f => f === '10-Q');
+    if (targetIndex === -1) {
+      return res.status(404).json({ error: '10-Q not found' });
+    }
+
+    const accessionNumber = accessionNumbers[targetIndex];
+    const accessionForUrl = accessionNumber.replace(/-/g, '');
+    const primaryDoc = primaryDocuments[targetIndex];
+    const documentUrl = `${SEC_ARCHIVES_URL}/${cik}/${accessionForUrl}/${primaryDoc}`;
+
+    // Check cache
+    const localFilename = `${ticker}_10Q_${filingDates[targetIndex]}.htm`;
+    const localPath = path.join(FILINGS_DIR, localFilename);
+
+    let content;
+    if (fs.existsSync(localPath)) {
+      content = fs.readFileSync(localPath, 'utf-8');
+    } else {
+      const docResponse = await fetch(documentUrl, {
+        headers: { 'User-Agent': SEC_USER_AGENT }
+      });
+
+      if (!docResponse.ok) {
+        throw new Error(`Failed to download: ${docResponse.status}`);
+      }
+
+      content = await docResponse.text();
+      fs.writeFileSync(localPath, content, 'utf-8');
+    }
+
+    // Strip HTML tags to get plain text
+    const plainText = content
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#\d+;/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    res.json({
+      ticker,
+      cik,
+      companyName: name,
+      filingDate: filingDates[targetIndex],
+      documentUrl,
+      textLength: plainText.length,
+      text: plainText
+    });
+  } catch (err) {
+    console.error('Error getting 10-Q text:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/sec/search
  * Search for companies by name or ticker
  */

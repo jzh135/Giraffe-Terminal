@@ -31,9 +31,11 @@ function StockDetail() {
 
   // SEC 10-K Filings
   const [secFilings, setSecFilings] = useState([]);
+  const [sec10QFilings, setSec10QFilings] = useState([]);
   const [secLoading, setSecLoading] = useState(false);
   const [secError, setSecError] = useState(null);
   const [secExpanded, setSecExpanded] = useState(false);
+  const [secTab, setSecTab] = useState('10-K'); // '10-K' or '10-Q'
 
   useEffect(() => {
     loadData();
@@ -75,12 +77,16 @@ function StockDetail() {
 
   // Load SEC 10-K filings
   async function loadSecFilings() {
-    if (secFilings.length > 0) return; // Already loaded
+    if (secFilings.length > 0 && sec10QFilings.length > 0) return; // Already loaded
     setSecLoading(true);
     setSecError(null);
     try {
-      const data = await api.getSecFilings(symbol, { form: '10-K', limit: 5 });
-      setSecFilings(data.filings || []);
+      const [data10K, data10Q] = await Promise.all([
+        api.getSecFilings(symbol, { form: '10-K', limit: 5 }),
+        api.getSecFilings(symbol, { form: '10-Q', limit: 5 })
+      ]);
+      setSecFilings(data10K.filings || []);
+      setSec10QFilings(data10Q.filings || []);
     } catch (err) {
       console.error('Failed to load SEC filings:', err);
       setSecError(err.message);
@@ -659,7 +665,7 @@ function StockDetail() {
         )}
       </div>
 
-      {/* SEC 10-K Filings Section */}
+      {/* SEC Filings Section */}
       <div className="card mb-lg">
         <div
           style={{
@@ -673,7 +679,7 @@ function StockDetail() {
             if (!secExpanded) loadSecFilings();
           }}
         >
-          <h3 style={{ margin: 0 }}>📄 SEC 10-K Filings</h3>
+          <h3 style={{ margin: 0 }}>📄 SEC Filings</h3>
           <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
             {secExpanded ? '▲ Collapse' : '▼ Expand'}
           </span>
@@ -681,6 +687,22 @@ function StockDetail() {
 
         {secExpanded && (
           <div style={{ marginTop: '16px' }}>
+            {/* Tab Buttons */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <button
+                className={`btn ${secTab === '10-K' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={(e) => { e.stopPropagation(); setSecTab('10-K'); }}
+              >
+                10-K (Annual)
+              </button>
+              <button
+                className={`btn ${secTab === '10-Q' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={(e) => { e.stopPropagation(); setSecTab('10-Q'); }}
+              >
+                10-Q (Quarterly)
+              </button>
+            </div>
+
             {secLoading && (
               <div className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>
                 <div className="spinner" style={{ margin: '0 auto 10px' }}></div>
@@ -702,62 +724,126 @@ function StockDetail() {
               </div>
             )}
 
-            {!secLoading && !secError && secFilings.length === 0 && (
-              <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
-                No 10-K filings found for {symbol}.
-              </div>
-            )}
+            {!secLoading && !secError && (
+              <>
+                {/* 10-K Tab */}
+                {secTab === '10-K' && (
+                  <>
+                    {secFilings.length === 0 ? (
+                      <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
+                        No 10-K filings found for {symbol}.
+                      </div>
+                    ) : (
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Filing Date</th>
+                            <th>Form</th>
+                            <th>Document</th>
+                            <th className="text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {secFilings.map((filing, idx) => (
+                            <tr key={idx}>
+                              <td>{formatDate(filing.filingDate)}</td>
+                              <td>
+                                <span className="badge badge-neutral">{filing.form}</span>
+                              </td>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {filing.primaryDocument}
+                              </td>
+                              <td className="text-right">
+                                <div className="action-row justify-end">
+                                  <a
+                                    href={filing.documentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    title="View on SEC"
+                                  >
+                                    🔗 View
+                                  </a>
+                                  <a
+                                    href={filing.indexUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    title="View all filing documents"
+                                  >
+                                    📁 Index
+                                  </a>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                )}
 
-            {!secLoading && secFilings.length > 0 && (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Filing Date</th>
-                    <th>Form</th>
-                    <th>Document</th>
-                    <th className="text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {secFilings.map((filing, idx) => (
-                    <tr key={idx}>
-                      <td>{formatDate(filing.filingDate)}</td>
-                      <td>
-                        <span className="badge badge-neutral">{filing.form}</span>
-                      </td>
-                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {filing.primaryDocument}
-                      </td>
-                      <td className="text-right">
-                        <div className="action-row justify-end">
-                          <a
-                            href={filing.documentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-secondary btn-sm"
-                            title="View on SEC"
-                          >
-                            🔗 View
-                          </a>
-                          <a
-                            href={filing.indexUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-secondary btn-sm"
-                            title="View all filing documents"
-                          >
-                            📁 Index
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                {/* 10-Q Tab */}
+                {secTab === '10-Q' && (
+                  <>
+                    {sec10QFilings.length === 0 ? (
+                      <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
+                        No 10-Q filings found for {symbol}.
+                      </div>
+                    ) : (
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Filing Date</th>
+                            <th>Form</th>
+                            <th>Document</th>
+                            <th className="text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sec10QFilings.map((filing, idx) => (
+                            <tr key={idx}>
+                              <td>{formatDate(filing.filingDate)}</td>
+                              <td>
+                                <span className="badge badge-warning">{filing.form}</span>
+                              </td>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {filing.primaryDocument}
+                              </td>
+                              <td className="text-right">
+                                <div className="action-row justify-end">
+                                  <a
+                                    href={filing.documentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    title="View on SEC"
+                                  >
+                                    🔗 View
+                                  </a>
+                                  <a
+                                    href={filing.indexUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    title="View all filing documents"
+                                  >
+                                    📁 Index
+                                  </a>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                )}
+              </>
             )}
 
             <div className="text-muted" style={{ fontSize: '0.8rem', marginTop: '12px', textAlign: 'center' }}>
-              Data from SEC EDGAR. Click 🔗 View to read the full 10-K on SEC.gov.
+              Data from SEC EDGAR. Click 🔗 View to read the full filing on SEC.gov.
             </div>
           </div>
         )}
@@ -835,12 +921,12 @@ function StockDetail() {
                       <td>
                         <span
                           className={`badge badge-${activity.type === 'buy'
-                              ? 'success'
-                              : activity.type === 'sell'
-                                ? 'danger'
-                                : activity.activityType === 'dividend'
-                                  ? 'warning'
-                                  : 'neutral'
+                            ? 'success'
+                            : activity.type === 'sell'
+                              ? 'danger'
+                              : activity.activityType === 'dividend'
+                                ? 'warning'
+                                : 'neutral'
                             }`}
                         >
                           {activity.activityType === 'dividend'

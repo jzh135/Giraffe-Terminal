@@ -6,14 +6,16 @@
 
 ## ✨ New Features
 
-### SEC EDGAR 10-K Integration
-Added full integration with the SEC EDGAR API for accessing company 10-K annual reports.
+### SEC EDGAR 10-K and 10-Q Integration
+Added full integration with the SEC EDGAR API for accessing company 10-K annual reports and 10-Q quarterly reports.
 
 #### Backend API (`/api/sec/`)
 - **`GET /api/sec/cik/:ticker`** - Get CIK (Central Index Key) number for any ticker symbol
 - **`GET /api/sec/filings/:ticker`** - Get list of SEC filings (defaults to 10-K)
 - **`GET /api/sec/10k/:ticker`** - Download and cache a 10-K filing
 - **`GET /api/sec/10k/:ticker/text`** - Get 10-K as plain text (HTML stripped) for AI processing
+- **`GET /api/sec/10q/:ticker`** - Download and cache a 10-Q filing
+- **`GET /api/sec/10q/:ticker/text`** - Get 10-Q as plain text (HTML stripped) for AI processing
 - **`GET /api/sec/search?q=`** - Search for companies by name or ticker
 
 #### Features:
@@ -23,10 +25,11 @@ Added full integration with the SEC EDGAR API for accessing company 10-K annual 
 - **SEC User-Agent Compliance**: Proper headers for SEC API compliance
 
 ### Stock Detail Page Enhancement
-Added **📄 SEC 10-K Filings** section to the stock detail page:
+Added **📄 SEC Filings** section to the stock detail page:
 - Collapsible section (click to expand)
+- **Tabbed interface** for switching between 10-K and 10-Q filings
 - Lazy loading - only fetches when expanded
-- Shows 5 most recent 10-K filings
+- Shows 5 most recent filings for each type
 - Direct links to view filings on SEC.gov
 - Index link to see all filing documents
 - Graceful error handling for ETFs/non-SEC tickers
@@ -78,7 +81,9 @@ Added comprehensive design documentation in `design-description/` folder:
 ## 🔮 Future Considerations
 
 ### AI Agent Integration
-The SEC 10-K plain text endpoint (`/api/sec/10k/:ticker/text`) is designed for AI agent consumption:
+The SEC filing text endpoints are designed for AI agent consumption:
+- `/api/sec/10k/:ticker/text` - Annual reports
+- `/api/sec/10q/:ticker/text` - Quarterly reports
 - Returns clean text with HTML stripped
 - Can be used for:
   - Financial analysis
@@ -87,7 +92,6 @@ The SEC 10-K plain text endpoint (`/api/sec/10k/:ticker/text`) is designed for A
   - Competitive analysis
 
 ### Potential Enhancements
-- Add 10-Q (quarterly report) support
 - Add 8-K (current report) support
 - Parse XBRL data for structured financials
 - Add filing alerts/notifications
