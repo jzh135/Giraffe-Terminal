@@ -4,7 +4,7 @@ import { calculatePortfolioValue, calculateCashBalance } from '../utils/calculat
 
 const router = Router();
 
-const CORS_PROXY = 'https://corsproxy.io/?';
+// Yahoo Finance API base URL (no CORS proxy needed for server-side requests)
 
 // Timeframe presets
 const TIMEFRAMES = {
@@ -208,10 +208,10 @@ router.get('/chart', async (req, res) => {
     const accounts =
       accountIdList.length > 0
         ? db
-            .prepare(
-              `SELECT * FROM accounts WHERE id IN (${accountIdList.map(() => '?').join(',')})`
-            )
-            .all(...accountIdList)
+          .prepare(
+            `SELECT * FROM accounts WHERE id IN (${accountIdList.map(() => '?').join(',')})`
+          )
+          .all(...accountIdList)
         : db.prepare('SELECT * FROM accounts').all();
 
     if (accounts.length === 0) {
@@ -813,7 +813,7 @@ async function getSPYHistory(startDate, endDate) {
     const period1 = Math.floor(start.getTime() / 1000);
     const period2 = Math.floor(end.getTime() / 1000) + 86400; // Add a day
 
-    const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=${period1}&period2=${period2}&interval=1d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=${period1}&period2=${period2}&interval=1d`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -993,7 +993,7 @@ async function fetchSPYPerformanceYTD(ytdStartDate) {
     const period1 = Math.floor(startDate.getTime() / 1000);
     const period2 = Math.floor(endDate.getTime() / 1000) + 86400;
 
-    const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=${period1}&period2=${period2}&interval=1d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=${period1}&period2=${period2}&interval=1d`;
     const response = await fetch(url);
 
     if (!response.ok) return null;
@@ -1023,7 +1023,7 @@ async function fetchSPYPerformanceYTD(ytdStartDate) {
 // Helper: Fetch S&P 500 performance (for main dashboard)
 async function fetchSPYPerformance(startDate, endDate) {
   try {
-    const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y`;
     const response = await fetch(url);
 
     if (!response.ok) return null;
@@ -1161,7 +1161,7 @@ async function fetchHistoricalPricesForSymbols(symbols, startDate, endDate, skip
       const period1 = Math.floor(start.getTime() / 1000);
       const period2 = Math.floor(end.getTime() / 1000) + 86400;
 
-      const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d`;
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d`;
       const response = await fetch(url);
 
       if (!response.ok) {
