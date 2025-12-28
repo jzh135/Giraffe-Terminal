@@ -29,6 +29,12 @@ function StockDetail() {
   // Research panel expansion
   const [researchExpanded, setResearchExpanded] = useState(false);
 
+  // SEC 10-K Filings
+  const [secFilings, setSecFilings] = useState([]);
+  const [secLoading, setSecLoading] = useState(false);
+  const [secError, setSecError] = useState(null);
+  const [secExpanded, setSecExpanded] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [symbol]);
@@ -64,6 +70,22 @@ function StockDetail() {
       console.error('Failed to load stock data:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Load SEC 10-K filings
+  async function loadSecFilings() {
+    if (secFilings.length > 0) return; // Already loaded
+    setSecLoading(true);
+    setSecError(null);
+    try {
+      const data = await api.getSecFilings(symbol, { form: '10-K', limit: 5 });
+      setSecFilings(data.filings || []);
+    } catch (err) {
+      console.error('Failed to load SEC filings:', err);
+      setSecError(err.message);
+    } finally {
+      setSecLoading(false);
     }
   }
 
@@ -637,6 +659,110 @@ function StockDetail() {
         )}
       </div>
 
+      {/* SEC 10-K Filings Section */}
+      <div className="card mb-lg">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+          }}
+          onClick={() => {
+            setSecExpanded(!secExpanded);
+            if (!secExpanded) loadSecFilings();
+          }}
+        >
+          <h3 style={{ margin: 0 }}>📄 SEC 10-K Filings</h3>
+          <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
+            {secExpanded ? '▲ Collapse' : '▼ Expand'}
+          </span>
+        </div>
+
+        {secExpanded && (
+          <div style={{ marginTop: '16px' }}>
+            {secLoading && (
+              <div className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>
+                <div className="spinner" style={{ margin: '0 auto 10px' }}></div>
+                Loading SEC filings...
+              </div>
+            )}
+
+            {secError && (
+              <div style={{
+                padding: '12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                borderRadius: '8px',
+                color: '#ef4444'
+              }}>
+                ⚠️ {secError}
+                <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>
+                  This may be an ETF or the ticker is not found in SEC records.
+                </div>
+              </div>
+            )}
+
+            {!secLoading && !secError && secFilings.length === 0 && (
+              <div className="text-muted" style={{ textAlign: 'center', padding: '16px' }}>
+                No 10-K filings found for {symbol}.
+              </div>
+            )}
+
+            {!secLoading && secFilings.length > 0 && (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Filing Date</th>
+                    <th>Form</th>
+                    <th>Document</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {secFilings.map((filing, idx) => (
+                    <tr key={idx}>
+                      <td>{formatDate(filing.filingDate)}</td>
+                      <td>
+                        <span className="badge badge-neutral">{filing.form}</span>
+                      </td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {filing.primaryDocument}
+                      </td>
+                      <td className="text-right">
+                        <div className="action-row justify-end">
+                          <a
+                            href={filing.documentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            title="View on SEC"
+                          >
+                            🔗 View
+                          </a>
+                          <a
+                            href={filing.indexUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            title="View all filing documents"
+                          >
+                            📁 Index
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="text-muted" style={{ fontSize: '0.8rem', marginTop: '12px', textAlign: 'center' }}>
+              Data from SEC EDGAR. Click 🔗 View to read the full 10-K on SEC.gov.
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-2">
         {/* Lots Section */}
         <div>
@@ -708,15 +834,14 @@ function StockDetail() {
                       <td>{formatDate(activity.date)}</td>
                       <td>
                         <span
-                          className={`badge badge-${
-                            activity.type === 'buy'
+                          className={`badge badge-${activity.type === 'buy'
                               ? 'success'
                               : activity.type === 'sell'
                                 ? 'danger'
                                 : activity.activityType === 'dividend'
                                   ? 'warning'
                                   : 'neutral'
-                          }`}
+                            }`}
                         >
                           {activity.activityType === 'dividend'
                             ? 'DIVIDEND'

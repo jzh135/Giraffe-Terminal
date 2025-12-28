@@ -96,8 +96,10 @@ giraffe-terminal/
 ├── src/                 # Frontend React application
 │   ├── components/      # Reusable components
 │   ├── pages/           # Page components
-│   └── data/            # Data management
-├── data/                # Application data (database, research)
+│   └── api/             # API client
+├── data/                # Application data (database, SEC filings)
+├── design-description/  # Design documentation
+├── devlog/              # Development logs per version
 ├── index.html           # HTML entry point
 ├── vite.config.js       # Vite configuration
 └── package.json         # Dependencies and scripts
@@ -182,6 +184,24 @@ npm install
 ```
 
 ## 📝 Dev Log
+
+- **2025-12-28**: Version **alpha-1.7**
+  - **SEC EDGAR Integration (NEW)**:
+    - Added full SEC EDGAR API integration for 10-K annual reports.
+    - New endpoints: `/api/sec/cik/:ticker`, `/api/sec/filings/:ticker`, `/api/sec/10k/:ticker`, `/api/sec/10k/:ticker/text`.
+    - Ticker-to-CIK mapping with 24-hour caching.
+    - Plain text extraction endpoint for AI agent use.
+    - 10-K filings cached locally in `data/sec-filings/`.
+  - **Stock Detail Page**:
+    - Added **📄 SEC 10-K Filings** collapsible section.
+    - Shows 5 most recent 10-K filings with direct links to SEC.gov.
+  - **Design Documentation**:
+    - Added `design-description/` folder with comprehensive docs.
+    - Includes architecture, database schema, API docs, page designs.
+  - **Backend**:
+    - Removed unnecessary CORS proxy from performance routes.
+  - **Devlog**:
+    - Added `devlog/` folder for version tracking.
 
 - **2025-12-18**: Version **alpha-1.6**
   - **Performance Chart Fix**:

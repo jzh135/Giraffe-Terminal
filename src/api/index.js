@@ -167,3 +167,23 @@ export const getThemes = () => request('/themes');
 export const createTheme = (data) => request('/themes', { method: 'POST', body: data });
 export const updateTheme = (id, data) => request(`/themes/${id}`, { method: 'PUT', body: data });
 export const deleteTheme = (id) => request(`/themes/${id}`, { method: 'DELETE' });
+
+// SEC EDGAR
+export const getSecCik = (ticker) => request(`/sec/cik/${ticker}`);
+export const getSecFilings = (ticker, options = {}) => {
+  const params = new URLSearchParams();
+  if (options.form) params.append('form', options.form);
+  if (options.limit) params.append('limit', options.limit);
+  const query = params.toString();
+  return request(`/sec/filings/${ticker}${query ? `?${query}` : ''}`);
+};
+export const getSec10K = (ticker, options = {}) => {
+  const params = new URLSearchParams();
+  if (options.year) params.append('year', options.year);
+  if (options.includeContent) params.append('includeContent', 'true');
+  const query = params.toString();
+  return request(`/sec/10k/${ticker}${query ? `?${query}` : ''}`);
+};
+export const getSec10KText = (ticker) => request(`/sec/10k/${ticker}/text`);
+export const searchSecCompanies = (query, limit = 20) =>
+  request(`/sec/search?q=${encodeURIComponent(query)}&limit=${limit}`);

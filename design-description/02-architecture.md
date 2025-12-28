@@ -53,6 +53,7 @@ Giraffe Terminal uses a **client-server architecture** with a React frontend and
 | Service | Purpose |
 |---------|---------|
 | **Yahoo Finance** | Real-time and historical stock prices |
+| **SEC EDGAR** | 10-K annual reports and company filings |
 
 ## Directory Structure
 
@@ -74,6 +75,7 @@ giraffe-terminal/
 │   │   ├── performance.js # Performance calculations
 │   │   ├── roles.js       # Stock role classification
 │   │   ├── themes.js      # Stock theme classification
+│   │   ├── sec.js         # SEC EDGAR 10-K filings
 │   │   └── admin.js       # Admin/developer tools
 │   ├── utils/             # Shared utilities
 │   └── middleware/        # Express middleware
@@ -100,7 +102,10 @@ giraffe-terminal/
 │
 ├── data/                  # Application data
 │   ├── giraffe.db        # SQLite database
-│   └── research/         # Research JSON files
+│   └── sec-filings/      # Cached SEC 10-K filings
+│
+├── design-description/    # Design documentation
+├── devlog/                # Development logs
 │
 ├── index.html            # HTML entry point
 ├── vite.config.js        # Vite configuration

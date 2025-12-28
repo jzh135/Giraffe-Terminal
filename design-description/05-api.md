@@ -337,6 +337,68 @@ Delete a theme.
 
 ---
 
+### SEC EDGAR (10-K Filings)
+
+Access SEC EDGAR filings for companies. Uses official SEC API (no authentication required).
+
+#### `GET /api/sec/cik/:ticker`
+Get CIK number for a ticker symbol.
+
+**Response:**
+```json
+{
+  "ticker": "AAPL",
+  "cik": 320193,
+  "cikPadded": "0000320193",
+  "name": "Apple Inc."
+}
+```
+
+#### `GET /api/sec/filings/:ticker`
+Get list of SEC filings for a company.
+
+**Query Parameters:**
+- `form` - Form type (default: "10-K")
+- `limit` - Max results (default: 10)
+
+**Response:**
+```json
+{
+  "ticker": "AAPL",
+  "cik": 320193,
+  "companyName": "Apple Inc.",
+  "formType": "10-K",
+  "filings": [
+    {
+      "form": "10-K",
+      "filingDate": "2024-11-01",
+      "accessionNumber": "0000320193-24-000081",
+      "primaryDocument": "aapl-20240928.htm",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/..."
+    }
+  ]
+}
+```
+
+#### `GET /api/sec/10k/:ticker`
+Download and cache a 10-K filing.
+
+**Query Parameters:**
+- `year` - Fiscal year (optional, defaults to most recent)
+- `includeContent` - Set to "true" to include raw HTML
+
+#### `GET /api/sec/10k/:ticker/text`
+Get 10-K as plain text (HTML stripped) for AI processing.
+
+#### `GET /api/sec/search`
+Search for companies by name or ticker.
+
+**Query Parameters:**
+- `q` - Search query (min 2 chars)
+- `limit` - Max results (default: 20)
+
+---
+
 ### Admin
 
 #### `GET /api/admin/export`
