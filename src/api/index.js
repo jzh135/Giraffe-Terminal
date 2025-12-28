@@ -168,30 +168,22 @@ export const createTheme = (data) => request('/themes', { method: 'POST', body: 
 export const updateTheme = (id, data) => request(`/themes/${id}`, { method: 'PUT', body: data });
 export const deleteTheme = (id) => request(`/themes/${id}`, { method: 'DELETE' });
 
-// SEC EDGAR
-export const getSecCik = (ticker) => request(`/sec/cik/${ticker}`);
-export const getSecFilings = (ticker, options = {}) => {
-  const params = new URLSearchParams();
-  if (options.form) params.append('form', options.form);
-  if (options.limit) params.append('limit', options.limit);
-  const query = params.toString();
-  return request(`/sec/filings/${ticker}${query ? `?${query}` : ''}`);
+// AI Investment Analysis Agent (Python backend)
+const AI_AGENT_URL = 'http://localhost:8000';
+
+export const analyzeStock = async (ticker, options = {}) => {
+  const response = await fetch(`${AI_AGENT_URL}/analyze/${ticker}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      num_quarters: options.numQuarters || 3,
+      include_current_price: true
+    })
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+    throw new Error(error.detail || 'Analysis failed');
+  }
+  return response.json();
 };
-export const getSec10K = (ticker, options = {}) => {
-  const params = new URLSearchParams();
-  if (options.year) params.append('year', options.year);
-  if (options.includeContent) params.append('includeContent', 'true');
-  const query = params.toString();
-  return request(`/sec/10k/${ticker}${query ? `?${query}` : ''}`);
-};
-export const getSec10KText = (ticker) => request(`/sec/10k/${ticker}/text`);
-export const getSec10Q = (ticker, options = {}) => {
-  const params = new URLSearchParams();
-  if (options.quarter) params.append('quarter', options.quarter);
-  if (options.includeContent) params.append('includeContent', 'true');
-  const query = params.toString();
-  return request(`/sec/10q/${ticker}${query ? `?${query}` : ''}`);
-};
-export const getSec10QText = (ticker) => request(`/sec/10q/${ticker}/text`);
-export const searchSecCompanies = (query, limit = 20) =>
-  request(`/sec/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+

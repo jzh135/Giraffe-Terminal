@@ -38,18 +38,37 @@ if not exist "node_modules\.bin\concurrently.cmd" (
     call npm install
 )
 
+REM Check if Python AI agent is set up
+set AI_AGENT_READY=0
+if exist "agent\venv\Scripts\python.exe" (
+    if exist "agent\.env" (
+        set AI_AGENT_READY=1
+    )
+)
+
 echo Starting services...
 echo.
 echo -------------------------------------------------------------------------------
-echo   Frontend: http://localhost:5173
-echo   Backend:  http://localhost:3001
+echo   Frontend:  http://localhost:5173
+echo   Backend:   http://localhost:3001
+if %AI_AGENT_READY%==1 (
+    echo   AI Agent:  http://localhost:8000
+) else (
+    echo   AI Agent:  [Not configured - see agent/README.md]
+)
 echo -------------------------------------------------------------------------------
 echo.
 echo Press Ctrl+C to stop the servers.
 echo.
 
-REM Use npx to ensure concurrently runs correctly
-npx concurrently --kill-others-on-fail "npm run server" "npm run client"
+REM Start all services with concurrently
+if %AI_AGENT_READY%==1 (
+    REM Start with AI agent
+    npx concurrently --kill-others-on-fail --names "server,client,agent" --prefix-colors "blue,green,magenta" "npm run server" "npm run client" "cd agent && venv\Scripts\python main.py"
+) else (
+    REM Start without AI agent
+    npx concurrently --kill-others-on-fail "npm run server" "npm run client"
+)
 
 if errorlevel 1 (
     echo.
@@ -58,9 +77,10 @@ if errorlevel 1 (
     echo -------------------------------------------------------------------------------
     echo.
     echo Common issues:
-    echo   - Port 3001 or 5173 already in use
+    echo   - Port 3001, 5173, or 8000 already in use
     echo   - Missing dependencies (try running install.bat)
     echo   - Database connection issues
+    echo   - AI Agent: Missing .env file or GOOGLE_API_KEY
     echo.
     pause
 )

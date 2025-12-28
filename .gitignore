@@ -30,3 +30,14 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Python AI Agent
+agent/venv/
+agent/.env
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
