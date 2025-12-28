@@ -185,7 +185,7 @@ npm install
 
 ## 📝 Dev Log
 
-- **2025-12-28**: Version **alpha-1.8**
+- **2025-12-28**: Version **alpha-1.7**
   - **Unified Price Refresh**:
     - Single "Refresh Prices" button now updates current prices, historical data, AND S&P 500 benchmark.
     - Fills missing historical price gaps from Yahoo Finance.
@@ -197,8 +197,6 @@ npm install
   - **Single Source of Truth**:
     - `price_history` table is now the authoritative source for all prices.
     - Performance chart and dashboard use the same data.
-
-- **2025-12-28**: Version **alpha-1.7**
   - **SEC EDGAR Integration (NEW)**:
     - Added full SEC EDGAR API integration for 10-K and 10-Q reports.
     - New endpoints: `/api/sec/cik/:ticker`, `/api/sec/filings/:ticker`, `/api/sec/10k/:ticker`, `/api/sec/10q/:ticker`.
