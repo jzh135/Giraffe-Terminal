@@ -13,6 +13,7 @@ This folder contains comprehensive design documentation for the Giraffe Terminal
 | [API Design](./05-api.md) | RESTful API endpoints and data contracts |
 | [Pages](./06-pages.md) | Individual page designs and user flows |
 | [Components](./07-components.md) | Reusable component specifications |
+| [AI Agent](./08-ai-agent.md) | Python AI investment analysis agent design |
 
 ## 🎯 Purpose
 

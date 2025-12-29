@@ -13,17 +13,18 @@ Giraffe Terminal uses a **client-server architecture** with a React frontend and
 │  └───────────────────────────────────────────────────────┘  │
 │                           │                                  │
 │                           │ HTTP/REST                        │
-│                           ▼                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │            Express Backend (Node.js)                   │  │
-│  │             http://localhost:3001                      │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                           │                                  │
-│                           ▼                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │              SQLite Database                           │  │
-│  │           data/giraffe.db                              │  │
-│  └───────────────────────────────────────────────────────┘  │
+│               ┌───────────┴───────────┐                      │
+│               ▼                       ▼                      │
+│  ┌───────────────────────┐  ┌───────────────────────┐       │
+│  │   Express Backend     │  │   Python AI Agent     │       │
+│  │  http://localhost:3001│  │  http://localhost:8000│       │
+│  └───────────────────────┘  └───────────────────────┘       │
+│               │                       │                      │
+│               ▼                       ▼                      │
+│  ┌───────────────────────┐  ┌───────────────────────┐       │
+│  │    SQLite Database    │  │   SEC EDGAR API       │       │
+│  │   data/giraffe.db     │  │   (External)          │       │
+│  └───────────────────────┘  └───────────────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,6 +55,17 @@ Giraffe Terminal uses a **client-server architecture** with a React frontend and
 |---------|---------|
 | **Yahoo Finance** | Real-time and historical stock prices |
 | **SEC EDGAR** | 10-K annual reports and company filings |
+
+### AI Agent (Python)
+
+| Technology | Purpose |
+|------------|---------|
+| **Python 3.11+** | Runtime environment |
+| **FastAPI** | Async REST API server |
+| **LangGraph** | Workflow orchestration for AI agent |
+| **LangChain Google GenAI** | Google Gemini LLM integration |
+| **Pydantic** | Data validation and serialization |
+| **httpx** | Async HTTP client for SEC API |
 
 ## Directory Structure
 
@@ -103,6 +115,11 @@ giraffe-terminal/
 ├── data/                  # Application data
 │   ├── giraffe.db        # SQLite database
 │   └── sec-filings/      # Cached SEC 10-K filings
+│
+├── agent/                 # AI Investment Analysis Agent
+│   ├── main.py           # FastAPI entry point
+│   ├── agent/            # LangGraph workflow & tools
+│   └── requirements.txt  # Python dependencies
 │
 ├── design-description/    # Design documentation
 ├── devlog/                # Development logs

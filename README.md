@@ -14,6 +14,7 @@ A powerful and intuitive portfolio management application for tracking investmen
 - **Research Panel**: Keep notes and research on stocks
 - **Customizable Branding**: Personalize app name and logo
 - **Developer Tools**: Database export and management features
+- **AI Investment Agent**: AI-powered analysis using SEC 10-Q filings and LLM synthesis
 
 ## 🛠️ Technology Stack
 
@@ -29,6 +30,12 @@ A powerful and intuitive portfolio management application for tracking investmen
 - **Express** - Web framework
 - **Better-SQLite3** - Database
 - **CORS** - Cross-origin resource sharing
+
+### AI Agent (Python)
+- **FastAPI** - Async REST API server
+- **LangGraph** - Workflow orchestration
+- **Google Gemini** - LLM for investment summaries
+- **SEC EDGAR API** - XBRL financial data extraction
 
 ## 📦 Installation
 
@@ -98,6 +105,10 @@ giraffe-terminal/
 │   ├── pages/           # Page components
 │   └── api/             # API client
 ├── data/                # Application data (database, SEC filings)
+├── agent/               # AI Investment Analysis Agent (Python)
+│   ├── main.py          # FastAPI entry point
+│   ├── agent/           # LangGraph workflow and tools
+│   └── requirements.txt # Python dependencies
 ├── design-description/  # Design documentation
 ├── devlog/              # Development logs per version
 ├── index.html           # HTML entry point
@@ -142,6 +153,9 @@ The backend provides RESTful API endpoints:
 - `/api/prices` - Price data management
 - `/api/performance` - Performance analytics
 - `/api/admin` - Admin operations (export, branding)
+
+### AI Agent API (Python - port 8000)
+- `POST /analyze/{ticker}` - AI-powered stock analysis using SEC 10-Q filings
 
 ## 🎨 Customization
 
