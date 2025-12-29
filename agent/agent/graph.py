@@ -119,9 +119,23 @@ async def generate_summary(state: AgentState) -> AgentState:
         # Call LLM
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         
+        # Extract text from response - handle both string and list content
+        content = response.content
+        if isinstance(content, list):
+            # Gemini returns list of content blocks, extract text from first one
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and "text" in part:
+                    text_parts.append(part["text"])
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            summary = " ".join(text_parts)
+        else:
+            summary = str(content)
+        
         return {
             **state,
-            "investment_summary": response.content,
+            "investment_summary": summary,
         }
     except Exception as e:
         # If LLM fails, still return the data without summary

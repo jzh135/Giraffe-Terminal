@@ -1,4 +1,4 @@
-# 🦒 Alpha 1.8 - Unified Price Refresh & Toast Notifications
+# 🦒 Alpha 1.8 - AI Investment Analysis Agent
 
 **Release Date:** December 28, 2024
 
@@ -6,113 +6,124 @@
 
 ## ✨ New Features
 
-### Unified Price Refresh
-Consolidated all price fetching into a single "Refresh Prices" button that updates:
-- **Current prices** for all holdings
-- **Historical prices** for performance charts
-- **S&P 500 (SPY)** benchmark data for comparison
+### Python AI Investment Analysis Agent
+Added a **Python-based AI agent** that analyzes company investments using SEC 10-Q filings.
 
-#### How It Works:
-1. For each symbol in your portfolio:
-   - Finds the first transaction date
-   - Fetches any missing historical prices from Yahoo Finance
-   - Updates `price_history` table with all data points
-   - Updates `stock_prices` with the latest price
-2. Also fetches SPY historical data for benchmark comparison
-3. Works even when market is closed (fills gaps from last trading day)
+#### Key Capabilities:
+- **Programmatic XBRL Extraction** - Fetches structured financial data directly from SEC's XBRL API (no LLM tokens used!)
+- **LangGraph Orchestration** - Clean workflow with conditional error handling
+- **Gemini 2.0 Flash Integration** - Generates investment summaries (~500 tokens per analysis)
+- **FastAPI Server** - REST API on port 8000 for frontend integration
 
-### Toast Notifications
-Added a modern toast notification system for user feedback:
-- **Success** ✅ - Shows number of prices refreshed and history points added
-- **Warning** ⚠️ - Market closed indicator
-- **Error** ❌ - Displays error messages
-- Auto-dismiss after 4 seconds
-- Click to dismiss early
-- Stacks vertically for multiple notifications
+#### Financial Metrics Extracted:
+- Revenue, Net Income, EPS (Basic/Diluted)
+- Gross Profit, Operating Income
+- Cash, Total Assets, Stockholders' Equity
+- Gross Margin, Operating Margin
+- YoY trend analysis
+
+### Stock Detail Page - AI Analysis Section
+Replaced the SEC Filings section with **🤖 AI Investment Analysis**:
+- Collapsible section (click to expand)
+- "Run AI Analysis" button triggers Python agent
+- Loading spinner during analysis
+- Displays quarterly metrics in table format
+- Shows trend analysis (revenue, margins, EPS)
+- AI-generated investment summary
 
 ---
 
-## 🔧 Improvements
+## 🔧 Architecture
 
-### Single Source of Truth
-- `price_history` table is now the authoritative source for all price data
-- `stock_prices` table gets its price from the latest `price_history` entry
-- Performance chart and dashboard now use the same data source
-- Eliminates price discrepancies between views
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────┐
+│  React Frontend │────▶│ Python AI Agent:8000 │────▶│ SEC XBRL API│
+│    :5173        │     │                      │     └─────────────┘
+└────────┬────────┘     │  LangGraph Workflow: │
+         │              │  1. Fetch XBRL (0 tokens)
+         │              │  2. Extract metrics   │
+         │              │  3. Calculate trends  │
+         ▼              │  4. Get price         │
+┌─────────────────┐     │  5. Generate summary  │──▶ Gemini Flash
+│ Node.js Backend │◀───▶│     (~500 tokens)     │
+│    :3001        │     └──────────────────────┘
+└─────────────────┘
+```
 
-### Always-On Refresh
-- Removed market hours check that prevented refreshing when closed
-- Now always fetches missing historical data
-- Toast shows "(market closed)" when applicable but still syncs data
+### Token Usage Optimization
+| Step | LLM Tokens |
+|------|------------|
+| Fetch XBRL data | 0 |
+| Extract metrics | 0 |
+| Calculate trends | 0 |
+| Get current price | 0 |
+| **Generate summary** | **~500** |
+
+**Total: ~500 tokens per analysis** (~$0.001 with Gemini Flash)
 
 ---
 
 ## 📁 Files Changed
 
-### New Files
-- `src/components/Toast.jsx` - Reusable toast notification component with useToast hook
+### New Files (Python Agent)
+- `agent/main.py` - FastAPI server
+- `agent/agent/graph.py` - LangGraph workflow
+- `agent/agent/models.py` - Pydantic schemas
+- `agent/agent/prompts.py` - Minimal LLM prompts
+- `agent/agent/tools/xbrl_extractor.py` - SEC XBRL parsing
+- `agent/agent/tools/price_fetcher.py` - Get prices from Giraffe API
+- `agent/requirements.txt` - Python dependencies
+- `agent/.env.example` - Environment template
+- `agent/README.md` - Agent documentation
 
 ### Modified Files
-- `server/routes/prices.js`
-  - Completely rewrote `/refresh` endpoint
-  - Added `fetchAndCacheHistoricalPrices()` helper
-  - Added `getNextDay()` helper
-  - Now fetches SPY alongside portfolio symbols
-- `src/pages/Dashboard.jsx`
-  - Added toast notifications for price refresh
-  - Simplified refresh logic (always refreshes)
-  - Reloads chart data after refresh
-- `src/pages/Holdings.jsx`
-  - Added toast notifications for price refresh
-  - Simplified refresh logic
-- `src/index.css`
-  - Added `@keyframes slideIn` animation for toasts
+- `server/index.js` - Removed SEC router (Python handles SEC now)
+- `src/api/index.js` - Added `analyzeStock()` function for AI agent
+- `src/pages/StockDetail.jsx` - Replaced SEC Filings with AI Analysis section
+- `install.bat` - Now sets up Python venv and dependencies
+- `start-server.bat` - Starts AI agent alongside Node.js
+- `.gitignore` - Added Python ignores (venv, __pycache__, etc.)
+
+### Deleted Files
+- `server/routes/sec.js` - Moved to Python agent
+- `data/sec-filings/` - No longer needed
 
 ---
 
-## 🔧 Technical Details
+## 🚀 Setup
 
-### Price Refresh Flow
-```
-POST /api/prices/refresh
-        ↓
-For each holding symbol:
-  1. Get first transaction date
-  2. Get last cached price_history date
-  3. Fetch missing dates from Yahoo Finance
-  4. Insert/update price_history
-  5. Update stock_prices with latest
-        ↓
-Fetch SPY (S&P 500):
-  1. Get earliest transaction date
-  2. Fetch missing SPY history
-        ↓
-Response: {
-  prices: [...],
-  historyUpdated: 84,
-  message: "Refreshed 15 prices, added 84 history points"
-}
+### Quick Start
+```bash
+# 1. Run install (sets up Python venv automatically)
+install.bat
+
+# 2. Add your Google API key to agent/.env
+# GOOGLE_API_KEY=your-key-here
+
+# 3. Start everything
+start-server.bat
 ```
 
-### Toast Component API
-```jsx
-import { ToastContainer, useToast } from '../components/Toast';
-
-const { toasts, addToast, removeToast } = useToast();
-
-// Usage
-addToast('Message here', 'success'); // success | error | warning | info
-
-// Render
-<ToastContainer toasts={toasts} removeToast={removeToast} />
+### Manual Setup
+```bash
+cd agent
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your GOOGLE_API_KEY
+python main.py
 ```
+
+Get your API key from: https://aistudio.google.com/apikey
 
 ---
 
 ## 🔮 Future Considerations
 
 ### Potential Enhancements
-- Add progress indicator for large history backfills
-- Batch Yahoo Finance requests for better performance
-- Add refresh button to performance chart directly
-- Consider WebSocket for real-time price updates during market hours
+- Add 10-K annual report analysis
+- Extract MD&A section for qualitative insights
+- Add competitor comparison
+- Cache analysis results
+- Add more financial ratios (P/E, ROE, etc.)
