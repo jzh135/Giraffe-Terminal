@@ -82,6 +82,32 @@ npm run server
 npm run client
 ```
 
+### Option 3: Using Docker (Recommended for Deployment)
+
+Docker provides an isolated, reproducible environment for running Giraffe Terminal.
+
+**Start the main application**:
+```bash
+docker-compose up -d
+```
+
+**Start all services (app + AI agent + Nginx)**:
+```bash
+docker-compose --profile with-agent --profile with-nginx up -d
+```
+
+**Development mode with hot-reload**:
+```bash
+docker-compose -f docker-compose.dev.yml up
+```
+
+**Stop all containers**:
+```bash
+docker-compose --profile with-agent --profile with-nginx down
+```
+
+See the [Docker Setup Guide](design-description/09-docker.md) for detailed configuration options.
+
 ## 🌐 Accessing the Application
 
 Once running, the application will be available at:
@@ -108,9 +134,15 @@ giraffe-terminal/
 ├── agent/               # AI Investment Analysis Agent (Python)
 │   ├── main.py          # FastAPI entry point
 │   ├── agent/           # LangGraph workflow and tools
+│   ├── Dockerfile       # Agent container image
 │   └── requirements.txt # Python dependencies
 ├── design-description/  # Design documentation
 ├── devlog/              # Development logs per version
+├── Dockerfile           # Production container image
+├── Dockerfile.dev       # Development container image
+├── docker-compose.yml   # Production orchestration
+├── docker-compose.dev.yml # Development orchestration
+├── nginx.conf           # Nginx reverse proxy config
 ├── index.html           # HTML entry point
 ├── vite.config.js       # Vite configuration
 └── package.json         # Dependencies and scripts

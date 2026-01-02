@@ -14,6 +14,7 @@ This folder contains comprehensive design documentation for the Giraffe Terminal
 | [Pages](./06-pages.md) | Individual page designs and user flows |
 | [Components](./07-components.md) | Reusable component specifications |
 | [AI Agent](./08-ai-agent.md) | Python AI investment analysis agent design |
+| [Docker Setup](./09-docker.md) | Docker containerization and deployment |
 
 ## 🎯 Purpose
 
@@ -24,4 +25,4 @@ This documentation serves as:
 
 ## 📅 Last Updated
 
-December 2025
+January 2026

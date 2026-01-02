@@ -1,0 +1,68 @@
+# ================================
+# Giraffe Terminal - Docker Compose
+# ================================
+# Production configuration
+
+services:
+  # Main application (frontend + backend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: giraffe-terminal
+    ports:
+      - "3001:3001"
+    volumes:
+      # Persist database
+      - giraffe-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    restart: unless-stopped
+    networks:
+      - giraffe-network
+
+  # AI Agent (optional)
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: giraffe-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GIRAFFE_API_URL=http://app:3001/api
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
+      - SEC_USER_AGENT=${SEC_USER_AGENT:-GiraffeTerminal admin@giraffeterminal.local}
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - giraffe-network
+    profiles:
+      - with-agent # Only start when explicitly requested
+
+  # Nginx reverse proxy (optional, for production)
+  nginx:
+    image: nginx:alpine
+    container_name: giraffe-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - giraffe-network
+    profiles:
+      - with-nginx # Only start when explicitly requested
+
+volumes:
+  giraffe-data:
+    name: giraffe-terminal-data
+
+networks:
+  giraffe-network:
+    name: giraffe-terminal-network

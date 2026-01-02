@@ -1,0 +1,59 @@
+# ================================
+# Giraffe Terminal - Docker Compose (Development)
+# ================================
+# Use: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # Development app with hot-reload
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: giraffe-terminal-dev
+    ports:
+      - "3001:3001" # Backend
+      - "5173:5173" # Frontend (Vite)
+    volumes:
+      # Mount source code for hot-reload
+      - .:/app
+      # Preserve node_modules from container
+      - /app/node_modules
+      # Persist database
+      - giraffe-dev-data:/app/data
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    networks:
+      - giraffe-dev-network
+
+  # AI Agent for development
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: giraffe-agent-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount agent source for hot-reload
+      - ./agent:/app
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GIRAFFE_API_URL=http://app:3001/api
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
+      - SEC_USER_AGENT=${SEC_USER_AGENT:-GiraffeTerminal admin@giraffeterminal.local}
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+    depends_on:
+      - app
+    networks:
+      - giraffe-dev-network
+    profiles:
+      - with-agent
+
+volumes:
+  giraffe-dev-data:
+    name: giraffe-terminal-dev-data
+
+networks:
+  giraffe-dev-network:
+    name: giraffe-terminal-dev-network

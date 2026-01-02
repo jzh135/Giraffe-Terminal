@@ -1,0 +1,53 @@
+# Dependencies
+node_modules
+agent/venv
+
+# Build outputs
+dist
+build
+
+# Git
+.git
+.gitignore
+
+# Environment files (sensitive data)
+.env
+.env.local
+.env.*.local
+agent/.env
+
+# Database files (we want fresh starts)
+*.db
+data/*.db
+server/giraffe.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE/Editor
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+
+# Docker files (no need to copy into container)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Design docs and dev files
+design-description
+devlog
+*.md
+!agent/README.md

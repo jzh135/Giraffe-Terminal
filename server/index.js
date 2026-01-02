@@ -18,10 +18,16 @@ import themesRouter from './routes/themes.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files in production (built React app)
+if (isProduction) {
+  app.use(express.static(join(__dirname, '..', 'dist')));
+}
 
 // API Routes
 app.get('/', (req, res) => {
@@ -39,6 +45,14 @@ app.use('/api/performance', performanceRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/themes', themesRouter);
+
+// Catch-all route for client-side routing (React Router)
+// Must be after API routes but before error handler
+if (isProduction) {
+  app.get('*', (req, res) => {
+    res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
